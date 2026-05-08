@@ -11,21 +11,28 @@ import {
   Send,
   Save,
   ChevronLeft,
+  Upload,
+  X,
+  List as ListIcon,
 } from "lucide-react";
 import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
 import {
   SIGN_TEMPLATES,
   TEMPLATES_BY_ID,
+  defaultSize,
+  isSquare,
   type SignTemplate,
+  type EditableField,
+  type SignSize,
 } from "@/lib/sign-templates";
-import { SignPreview, DEFAULT_RATE_ROWS, type FieldValues, type RateRow } from "@/components/sign/SignPreview";
 import {
-  nextOrderId,
-  saveOrder,
-  useSession,
-  type Order,
-} from "@/lib/orders";
+  SignPreview,
+  DEFAULT_RATE_ROWS,
+  type FieldValues,
+  type RateRow,
+} from "@/components/sign/SignPreview";
+import { nextOrderId, saveOrder, useSession, type Order } from "@/lib/orders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,9 +63,8 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
   const [values, setValues] = useState<FieldValues>(() =>
     initFieldValues(template),
   );
+  const [size, setSize] = useState<SignSize>(() => defaultSize(template));
   const [specs, setSpecs] = useState({
-    widthIn: template.defaultDimensions.widthIn,
-    heightIn: template.defaultDimensions.heightIn,
     quantity: 1,
     material: template.materials[0] ?? "Aluminium",
     notes: "",
@@ -72,17 +78,14 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
     const next = TEMPLATES_BY_ID[id] ?? SIGN_TEMPLATES[2];
     setTemplateId(id);
     setValues(initFieldValues(next));
+    setSize(defaultSize(next));
     setSpecs((s) => ({
       ...s,
-      widthIn: next.defaultDimensions.widthIn,
-      heightIn: next.defaultDimensions.heightIn,
       material: next.materials[0] ?? s.material,
     }));
   };
 
   const previewRef = useRef<HTMLDivElement>(null);
-
-  // Render preview at a target export width regardless of layout width
   const exportRef = useRef<HTMLDivElement>(null);
 
   const downloadPng = async () => {
@@ -104,14 +107,12 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
       cacheBust: true,
       backgroundColor: "#ffffff",
     });
-    const widthIn = specs.widthIn;
-    const heightIn = specs.heightIn;
     const pdf = new jsPDF({
-      orientation: widthIn > heightIn ? "landscape" : "portrait",
+      orientation: size.widthIn > size.heightIn ? "landscape" : "portrait",
       unit: "in",
-      format: [widthIn, heightIn],
+      format: [size.widthIn, size.heightIn],
     });
-    pdf.addImage(dataUrl, "PNG", 0, 0, widthIn, heightIn);
+    pdf.addImage(dataUrl, "PNG", 0, 0, size.widthIn, size.heightIn);
     pdf.save(`${template.id}-${slug(location || "sign")}.pdf`);
   };
 
@@ -131,7 +132,7 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
     const rows: [string, string][] = [
       ["Template", `${template.number} — ${template.name}`],
       ["Location", location || "—"],
-      ["Dimensions", `${specs.widthIn}" W × ${specs.heightIn}" H`],
+      ["Dimensions", `${size.widthIn}" W × ${size.heightIn}" H`],
       ["Quantity", String(specs.quantity)],
       ["Material", specs.material],
       ["Brand colors", "Parkwell Blue #19B2EC, Ink #0A202E, White #FFFFFF"],
@@ -165,7 +166,13 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
       templateId: template.id,
       status,
       values,
-      specs,
+      specs: {
+        widthIn: size.widthIn,
+        heightIn: size.heightIn,
+        quantity: specs.quantity,
+        material: specs.material,
+        notes: specs.notes,
+      },
       location: location || `${template.name} — ${session.name}`,
       createdBy: session,
       createdAt: Date.now(),
@@ -210,7 +217,7 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
               showZones={step === "content"}
             />
           </div>
-          {/* Hidden export-grade copy at fixed pixel width for rasterization */}
+          {/* Hidden export-grade copy */}
           <div
             style={{
               position: "fixed",
@@ -244,8 +251,10 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
           {step === "specs" && (
             <SpecsStep
               template={template}
+              size={size}
               specs={specs}
               location={location}
+              onSize={setSize}
               onSpecs={setSpecs}
               onLocation={setLocation}
               onBack={() => setStep("content")}
@@ -255,6 +264,7 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
           {step === "review" && (
             <ReviewStep
               template={template}
+              size={size}
               specs={specs}
               location={location}
               onBack={() => setStep("specs")}
@@ -272,6 +282,8 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
   );
 }
 
+/* -------------------------- Responsive Preview -------------------------- */
+
 function PreviewBox({
   previewRef,
   template,
@@ -283,8 +295,6 @@ function PreviewBox({
   values: FieldValues;
   showZones: boolean;
 }) {
-  // Container max — preview clamps to MIN(container width, max) so it
-  // never overflows on phones narrower than 460px.
   const MAX_WIDTH = 460;
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(MAX_WIDTH);
@@ -322,7 +332,7 @@ function PreviewBox({
   );
 }
 
-/* ---------------------------------- Step 1: Content ---------------------------------- */
+/* ============================ Step 1: Content ============================ */
 
 function ContentStep({
   template,
@@ -356,69 +366,22 @@ function ContentStep({
         <p className="mt-3 text-sm text-muted-foreground">{template.description}</p>
       </Card>
 
-      {template.editableFields.length === 0 ? (
-        <Card>
-          <CardHeader
-            title="2. Content"
-            subtitle="This sign has no editable fields — the artwork ships as-is from the brand guide."
-          />
-          <div className="rounded-xl border border-dashed border-border bg-muted/40 p-5 text-sm text-muted-foreground">
-            <CheckCircle2 className="h-4 w-4 text-parkwell-green inline mr-2" />
-            Locked to brand. You only choose dimensions, material, and quantity in the next step.
-          </div>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader
-            title="2. Content"
-            subtitle="Only the fields below are editable. Everything else is locked to brand."
-          />
-          <div className="space-y-5">
-            {template.editableFields.map((field) => {
-              if (field.type === "rate-table") {
-                const rows: RateRow[] =
-                  Array.isArray(values[field.id]) && (values[field.id] as RateRow[]).length
-                    ? (values[field.id] as RateRow[])
-                    : DEFAULT_RATE_ROWS;
-                return (
-                  <RateTableEditor
-                    key={field.id}
-                    rows={rows}
-                    onChange={(next) =>
-                      onValues({ ...values, [field.id]: next })
-                    }
-                  />
-                );
-              }
-              const v =
-                typeof values[field.id] === "string"
-                  ? (values[field.id] as string)
-                  : "";
-              const Component = field.type === "messaging" ? Textarea : Input;
-              return (
-                <div key={field.id}>
-                  <Label className="mb-1.5 block">
-                    {field.label}
-                    {field.constraints?.maxChars && (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        max {field.constraints.maxChars} chars
-                      </span>
-                    )}
-                  </Label>
-                  <Component
-                    value={v}
-                    placeholder={field.placeholder}
-                    rows={field.type === "messaging" ? 3 : undefined}
-                    onChange={(e) =>
-                      onValues({ ...values, [field.id]: e.target.value })
-                    }
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
+      <Card>
+        <CardHeader
+          title="2. Content"
+          subtitle="Edit the fields below. Brand colors, fonts, the wave, and the logo stay locked."
+        />
+        <div className="space-y-5">
+          {template.editableFields.map((field) => (
+            <FieldEditor
+              key={field.id}
+              field={field}
+              value={values[field.id]}
+              onChange={(v) => onValues({ ...values, [field.id]: v })}
+            />
+          ))}
+        </div>
+      </Card>
 
       <div className="flex justify-end">
         <Button
@@ -432,10 +395,183 @@ function ContentStep({
   );
 }
 
+/* --------------------------- Per-field editor --------------------------- */
+
+function FieldEditor({
+  field,
+  value,
+  onChange,
+}: {
+  field: EditableField;
+  value: string | string[] | RateRow[] | undefined;
+  onChange: (v: string | string[] | RateRow[]) => void;
+}) {
+  if (field.type === "rate-table") {
+    const rows: RateRow[] =
+      Array.isArray(value) && value.length > 0 && typeof value[0] === "object"
+        ? (value as RateRow[])
+        : DEFAULT_RATE_ROWS;
+    return <RateTableEditor label={field.label} rows={rows} onChange={onChange} />;
+  }
+
+  if (field.type === "list") {
+    const items: string[] = Array.isArray(value)
+      ? (value as string[]).filter((v) => typeof v === "string")
+      : Array.isArray(field.placeholder)
+        ? (field.placeholder as string[])
+        : [];
+    return (
+      <ListEditor
+        label={field.label}
+        items={items.length > 0 ? items : (field.placeholder as string[])}
+        bulletStyle={field.style.bulletStyle ?? "•"}
+        max={field.constraints?.maxItems ?? 12}
+        onChange={onChange}
+      />
+    );
+  }
+
+  if (field.type === "qr-image") {
+    const dataUrl = typeof value === "string" ? value : "";
+    return <QrUploader label={field.label} value={dataUrl} onChange={onChange} />;
+  }
+
+  const v = typeof value === "string" ? value : "";
+  const isMultiline =
+    field.type === "body" ||
+    field.type === "messaging" ||
+    (field.constraints?.maxRows ?? 1) > 1;
+
+  return (
+    <div>
+      <FieldLabel label={field.label} constraints={field.constraints} value={v} />
+      {isMultiline ? (
+        <Textarea
+          value={v}
+          placeholder={
+            Array.isArray(field.placeholder)
+              ? (field.placeholder as string[]).join("\n")
+              : field.placeholder
+          }
+          rows={Math.min(6, Math.max(2, field.constraints?.maxRows ?? 3))}
+          onChange={(e) => onChange(e.target.value)}
+          className="resize-none"
+        />
+      ) : (
+        <Input
+          value={v}
+          placeholder={
+            typeof field.placeholder === "string" ? field.placeholder : ""
+          }
+          maxLength={field.constraints?.maxChars}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </div>
+  );
+}
+
+function FieldLabel({
+  label,
+  constraints,
+  value,
+}: {
+  label: string;
+  constraints?: EditableField["constraints"];
+  value: string;
+}) {
+  return (
+    <div className="flex items-baseline justify-between mb-1.5">
+      <Label>{label}</Label>
+      {constraints?.maxChars && (
+        <span className="text-[11px] text-muted-foreground tabular-nums">
+          {value.length}/{constraints.maxChars}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------ List editor ------------------------------ */
+
+function ListEditor({
+  label,
+  items,
+  bulletStyle,
+  max,
+  onChange,
+}: {
+  label: string;
+  items: string[];
+  bulletStyle: "•" | "–" | "1." | "none";
+  max: number;
+  onChange: (items: string[]) => void;
+}) {
+  const update = (i: number, val: string) => {
+    const copy = [...items];
+    copy[i] = val;
+    onChange(copy);
+  };
+  const remove = (i: number) => onChange(items.filter((_, j) => j !== i));
+  const add = () => onChange([...items, ""]);
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-2">
+        <Label className="flex items-center gap-1.5">
+          <ListIcon className="h-3.5 w-3.5" />
+          {label}
+        </Label>
+        <span className="text-[11px] text-muted-foreground">
+          {items.length}/{max}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {items.map((item, i) => (
+          <div key={i} className="flex gap-2 items-start">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground shrink-0">
+              {bulletStyle === "1." ? `${i + 1}.` : bulletStyle === "–" ? "–" : "•"}
+            </span>
+            <Textarea
+              value={item}
+              onChange={(e) => update(i, e.target.value)}
+              rows={2}
+              className="resize-none flex-1 min-h-9"
+            />
+            {items.length > 1 && (
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                aria-label="Remove item"
+                className="h-9 w-9 inline-flex items-center justify-center text-muted-foreground hover:text-parkwell-red rounded-full hover:bg-parkwell-red/10 shrink-0"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        ))}
+        {items.length < max && (
+          <button
+            type="button"
+            onClick={add}
+            className="inline-flex items-center gap-1.5 text-sm text-parkwell-blue font-medium hover:underline"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add item
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------ Rate table ------------------------------ */
+
 function RateTableEditor({
+  label,
   rows,
   onChange,
 }: {
+  label: string;
   rows: RateRow[];
   onChange: (rows: RateRow[]) => void;
 }) {
@@ -447,7 +583,7 @@ function RateTableEditor({
 
   return (
     <div className="space-y-3">
-      <Label>Parking rates</Label>
+      <Label>{label}</Label>
       {rows.map((row, i) => (
         <div
           key={i}
@@ -538,25 +674,130 @@ function RateTableEditor({
   );
 }
 
-/* ---------------------------------- Step 2: Specs ---------------------------------- */
+/* ------------------------------ QR uploader ------------------------------ */
+
+function QrUploader({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFile = (file: File) => {
+    setError(null);
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload an image file (PNG, JPG, SVG).");
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      setError("Image must be under 4MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => onChange(reader.result as string);
+    reader.onerror = () => setError("Couldn't read that file. Try another.");
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div>
+      <Label className="mb-2 block">{label}</Label>
+      <div
+        className={cn(
+          "rounded-xl border-2 border-dashed border-border bg-muted/30 p-4 transition-colors",
+          "hover:border-parkwell-blue/50",
+        )}
+      >
+        {value ? (
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={value}
+              alt="QR code preview"
+              className="h-20 w-20 rounded-md bg-white object-contain border border-border shrink-0"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold">QR code uploaded</div>
+              <div className="text-xs text-muted-foreground">
+                Replaces the placeholder QR on this sign.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              aria-label="Remove QR"
+              className="h-9 w-9 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-parkwell-red hover:bg-parkwell-red/10"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="w-full flex flex-col items-center gap-2 py-4 text-center text-muted-foreground hover:text-foreground"
+          >
+            <div className="h-11 w-11 rounded-full bg-parkwell-blue/10 text-parkwell-blue inline-flex items-center justify-center">
+              <Upload className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-foreground">
+                Upload QR code
+              </div>
+              <div className="text-xs">PNG, JPG or SVG · up to 4MB</div>
+            </div>
+          </button>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/svg+xml,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+          e.target.value = "";
+        }}
+      />
+      {error && (
+        <p className="mt-2 text-xs text-parkwell-red">{error}</p>
+      )}
+    </div>
+  );
+}
+
+/* ============================ Step 2: Specs ============================ */
 
 function SpecsStep({
   template,
+  size,
   specs,
   location,
+  onSize,
   onSpecs,
   onLocation,
   onBack,
   onNext,
 }: {
   template: SignTemplate;
-  specs: { widthIn: number; heightIn: number; quantity: number; material: string; notes: string };
+  size: SignSize;
+  specs: { quantity: number; material: string; notes: string };
   location: string;
+  onSize: (s: SignSize) => void;
   onSpecs: (s: typeof specs) => void;
   onLocation: (s: string) => void;
   onBack: () => void;
   onNext: () => void;
 }) {
+  const sizeKey = `${size.widthIn}x${size.heightIn}`;
+  const sq = isSquare(template);
+
   return (
     <div className="space-y-6">
       <Card>
@@ -569,30 +810,37 @@ function SpecsStep({
       </Card>
 
       <Card>
-        <CardHeader title="4. Dimensions" subtitle="Print size in inches" />
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="mb-1.5 block">Width (in)</Label>
-            <Input
-              type="number"
-              min={1}
-              value={specs.widthIn}
-              onChange={(e) => onSpecs({ ...specs, widthIn: Number(e.target.value) || 0 })}
-            />
-          </div>
-          <div>
-            <Label className="mb-1.5 block">Height (in)</Label>
-            <Input
-              type="number"
-              min={1}
-              value={specs.heightIn}
-              onChange={(e) => onSpecs({ ...specs, heightIn: Number(e.target.value) || 0 })}
-            />
-          </div>
-        </div>
+        <CardHeader
+          title="4. Sign size"
+          subtitle={
+            sq
+              ? "Square dimensions only — pick a size that fits the install location."
+              : "Fixed sizes that preserve the brand-correct aspect ratio."
+          }
+        />
+        <Select
+          value={sizeKey}
+          onValueChange={(v) => {
+            const next = template.sizes.find(
+              (s) => `${s.widthIn}x${s.heightIn}` === v,
+            );
+            if (next) onSize(next);
+          }}
+        >
+          <SelectTrigger className="h-12">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {template.sizes.map((s) => (
+              <SelectItem key={`${s.widthIn}x${s.heightIn}`} value={`${s.widthIn}x${s.heightIn}`}>
+                {s.label ?? `${s.widthIn}" × ${s.heightIn}"`}
+                {s === template.sizes[0] && " (default)"}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <p className="mt-2 text-xs text-muted-foreground">
-          Brand-guide default for {template.name}: {template.defaultDimensions.widthIn}&quot; ×{" "}
-          {template.defaultDimensions.heightIn}&quot;
+          Text scales automatically with the chosen size — brand proportions stay consistent.
         </p>
       </Card>
 
@@ -655,10 +903,11 @@ function SpecsStep({
   );
 }
 
-/* ---------------------------------- Step 3: Review ---------------------------------- */
+/* ============================ Step 3: Review ============================ */
 
 function ReviewStep({
   template,
+  size,
   specs,
   location,
   onBack,
@@ -670,7 +919,8 @@ function ReviewStep({
   submittedOrderId,
 }: {
   template: SignTemplate;
-  specs: { widthIn: number; heightIn: number; quantity: number; material: string; notes: string };
+  size: SignSize;
+  specs: { quantity: number; material: string; notes: string };
   location: string;
   onBack: () => void;
   onSaveDraft: () => void;
@@ -687,7 +937,7 @@ function ReviewStep({
         <dl className="grid grid-cols-2 gap-y-3 text-sm">
           <Row label="Template" value={`${template.number} — ${template.name}`} />
           <Row label="Location" value={location || "—"} />
-          <Row label="Dimensions" value={`${specs.widthIn}" × ${specs.heightIn}"`} />
+          <Row label="Dimensions" value={`${size.widthIn}" × ${size.heightIn}"`} />
           <Row label="Quantity" value={String(specs.quantity)} />
           <Row label="Material" value={specs.material} />
         </dl>
@@ -703,7 +953,7 @@ function ReviewStep({
             "Parkwell Blue (#19B2EC) and Ink (#0A202E) used as defined",
             "Montserrat — Bold for headings, Regular for body",
             "Wave footer with white Parkwell logo on Ink",
-            "No abbreviations in editable copy",
+            "Aspect ratio preserved across all available sizes",
           ].map((c) => (
             <li key={c} className="flex items-start gap-2">
               <CheckCircle2 className="h-4 w-4 text-parkwell-green mt-0.5 shrink-0" />
@@ -782,7 +1032,7 @@ function ReviewStep({
   );
 }
 
-/* ---------------------------------- UI helpers ---------------------------------- */
+/* ============================== UI helpers ============================== */
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
@@ -849,12 +1099,16 @@ function Steps({ current }: { current: Step }) {
   );
 }
 
-/* ---------------------------------- Helpers ---------------------------------- */
+/* ============================== Helpers ============================== */
 
 function initFieldValues(template: SignTemplate): FieldValues {
   const v: FieldValues = {};
   for (const f of template.editableFields) {
     if (f.type === "rate-table") v[f.id] = DEFAULT_RATE_ROWS;
+    else if (f.type === "list")
+      v[f.id] = Array.isArray(f.placeholder)
+        ? [...(f.placeholder as string[])]
+        : [];
     else v[f.id] = "";
   }
   return v;
@@ -876,4 +1130,3 @@ function triggerDownload(dataUrl: string, filename: string) {
   a.click();
   a.remove();
 }
-

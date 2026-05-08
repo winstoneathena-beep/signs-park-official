@@ -8,17 +8,9 @@ import { cn } from "@/lib/utils";
 export type RateRow = { label: string; sub: string; rates: string[] };
 
 export type FieldValues = {
-  [fieldId: string]: string | RateRow[];
+  [fieldId: string]: string | string[] | RateRow[];
 };
 
-/**
- * Renders a sign template at any size.
- *
- * The base PNG (extracted from the brand guide pptx at print resolution) is
- * the visual ground truth — we never redraw the artwork. Editable fields
- * are positioned absolutely on top using normalized 0..1 bbox coordinates,
- * and font sizes scale relative to the rendered HEIGHT in px.
- */
 type Props = {
   template: SignTemplate;
   values?: FieldValues;
@@ -92,6 +84,8 @@ export const SignPreview = forwardRef<HTMLDivElement, Props>(function SignPrevie
   );
 });
 
+/* ------------------------------ FieldOverlay ------------------------------ */
+
 function FieldOverlay({
   field,
   value,
@@ -100,12 +94,12 @@ function FieldOverlay({
   showZones,
 }: {
   field: EditableField;
-  value: string | RateRow[] | undefined;
+  value: string | string[] | RateRow[] | undefined;
   width: number;
   height: number;
   showZones: boolean;
 }) {
-  const { bbox, style } = field;
+  const { bbox, style, type } = field;
   const px = {
     left: bbox.x * width,
     top: bbox.y * height,
@@ -113,24 +107,75 @@ function FieldOverlay({
     height: bbox.h * height,
   };
   const fontSize = style.fontSize * height;
+  const outline = showZones ? "1px dashed rgba(255,255,255,0.6)" : undefined;
 
-  const bg =
-    field.id === "locationName" || field.id === "propertyName"
-      ? "#FFFFFF"
-      : "#19B2EC";
-
-  if (field.type === "rate-table") {
-    const rows: RateRow[] =
-      Array.isArray(value) && value.length > 0 ? value : DEFAULT_RATE_ROWS;
+  /* QR image */
+  if (type === "qr-image") {
+    const src = typeof value === "string" && value.length > 0 ? value : null;
     return (
       <div
         style={{
           position: "absolute",
           ...px,
-          background: bg,
+          background: style.bgColor,
+          outline,
+          padding: "2%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {src ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={src}
+            alt="QR code"
+            style={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              objectFit: "contain",
+            }}
+            draggable={false}
+          />
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "2px dashed rgba(10,32,46,0.25)",
+              borderRadius: "6px",
+              color: "rgba(10,32,46,0.55)",
+              fontSize: Math.max(10, fontSize * 0.7),
+              textAlign: "center",
+              padding: "8%",
+              fontFamily: "var(--font-sans)",
+            }}
+          >
+            Upload QR code
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* Rate table */
+  if (type === "rate-table") {
+    const rows: RateRow[] =
+      Array.isArray(value) && value.length > 0 && typeof value[0] === "object"
+        ? (value as RateRow[])
+        : DEFAULT_RATE_ROWS;
+    return (
+      <div
+        style={{
+          position: "absolute",
+          ...px,
+          background: style.bgColor,
           color: style.color,
           fontFamily: "var(--font-sans)",
-          outline: showZones ? "1px dashed rgba(255,255,255,0.6)" : undefined,
+          outline,
         }}
       >
         <RateTable
@@ -144,20 +189,129 @@ function FieldOverlay({
     );
   }
 
-  const text = typeof value === "string" && value.length > 0 ? value : field.placeholder;
+  /* List with bullets */
+  if (type === "list") {
+    const items: string[] = Array.isArray(value)
+      ? (value as string[]).filter((v) => typeof v === "string")
+      : Array.isArray(field.placeholder)
+        ? (field.placeholder as string[])
+        : [];
+    const list = items.length > 0 ? items : (field.placeholder as string[]);
+    return (
+      <div
+        style={{
+          position: "absolute",
+          ...px,
+          background: style.bgColor,
+          color: style.color,
+          fontFamily: "var(--font-sans)",
+          fontWeight: style.fontWeight,
+          fontSize,
+          lineHeight: style.lineHeight ?? 1.35,
+          textAlign: style.align ?? "left",
+          textTransform: style.transform ?? "none",
+          fontStyle: style.italic ? "italic" : "normal",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent:
+            style.valign === "top"
+              ? "flex-start"
+              : style.valign === "bottom"
+                ? "flex-end"
+                : "center",
+          padding: `${fontSize * 0.3}px ${fontSize * 0.5}px`,
+          gap: `${fontSize * 0.25}px`,
+          outline,
+        }}
+      >
+        {list.map((item, i) => (
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              gap: `${fontSize * 0.5}px`,
+              alignItems: "baseline",
+              justifyContent:
+                style.align === "center"
+                  ? "center"
+                  : style.align === "right"
+                    ? "flex-end"
+                    : "flex-start",
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                flex: "0 0 auto",
+                opacity: 0.95,
+                minWidth: style.bulletStyle === "1." ? `${fontSize * 1.1}px` : "auto",
+              }}
+            >
+              {bulletMarker(style.bulletStyle, i)}
+            </span>
+            <span style={{ flex: "0 1 auto" }}>{item || " "}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  /* Vertical word stack — Delineator */
+  if (field.id === "directionWord") {
+    const text =
+      typeof value === "string" && value.length > 0
+        ? value
+        : (field.placeholder as string);
+    const letters = text.toUpperCase().split("");
+    return (
+      <div
+        style={{
+          position: "absolute",
+          ...px,
+          background: style.bgColor,
+          color: style.color,
+          fontFamily: "var(--font-sans)",
+          fontWeight: style.fontWeight,
+          fontSize,
+          textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-around",
+          alignItems: "center",
+          padding: `${fontSize * 0.3}px 0`,
+          outline,
+        }}
+      >
+        {letters.map((l, i) => (
+          <span key={i} style={{ lineHeight: 1.0 }}>
+            {l}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  /* Default: text / headline / body */
+  const text =
+    typeof value === "string" && value.length > 0
+      ? value
+      : Array.isArray(field.placeholder)
+        ? (field.placeholder as string[]).join("\n")
+        : (field.placeholder as string);
 
   return (
     <div
       style={{
         position: "absolute",
         ...px,
-        background: bg,
+        background: style.bgColor,
         color: style.color,
         fontWeight: style.fontWeight,
         fontSize,
         lineHeight: style.lineHeight ?? 1.15,
         textAlign: style.align ?? "center",
         textTransform: style.transform ?? "none",
+        fontStyle: style.italic ? "italic" : "normal",
         fontFamily: "var(--font-sans)",
         display: "flex",
         flexDirection: "column",
@@ -173,9 +327,9 @@ function FieldOverlay({
             : style.align === "right"
               ? "flex-end"
               : "center",
-        padding: `${fontSize * 0.15}px ${fontSize * 0.4}px`,
+        padding: `${fontSize * 0.2}px ${fontSize * 0.45}px`,
         whiteSpace: "pre-wrap",
-        outline: showZones ? "1px dashed rgba(0,0,0,0.4)" : undefined,
+        outline,
       }}
     >
       {text.split("\n").map((line, i) => (
@@ -184,6 +338,27 @@ function FieldOverlay({
     </div>
   );
 }
+
+/* ------------------------------ Helpers ------------------------------ */
+
+function bulletMarker(
+  style: EditableField["style"]["bulletStyle"],
+  index: number,
+): string {
+  switch (style) {
+    case "1.":
+      return `${index + 1}.`;
+    case "–":
+      return "–";
+    case "none":
+      return "";
+    case "•":
+    default:
+      return "•";
+  }
+}
+
+/* ------------------------------ Rate table ------------------------------ */
 
 function RateTable({
   rows,
@@ -222,13 +397,26 @@ function RateTable({
             lineHeight: 1.15,
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+            }}
+          >
             <div style={{ fontWeight: 700 }}>{row.label}</div>
             {row.sub && (
               <div style={{ fontWeight: weight, opacity: 0.95 }}>{row.sub}</div>
             )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", fontWeight: weight }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              fontWeight: weight,
+            }}
+          >
             {row.rates.map((r, j) => (
               <div key={j}>{r || " "}</div>
             ))}

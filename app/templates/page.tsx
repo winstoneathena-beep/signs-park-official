@@ -87,7 +87,7 @@ function TemplateCard({ t }: { t: SignTemplate }) {
         <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2">{t.description}</p>
         <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
           <span>
-            {t.defaultDimensions.widthIn}&quot; × {t.defaultDimensions.heightIn}&quot;
+            {t.sizes[0].widthIn}&quot; × {t.sizes[0].heightIn}&quot;
           </span>
           <span className="inline-flex items-center gap-1 font-semibold text-parkwell-blue group-hover:gap-2 transition-all">
             Start order <ArrowRight className="h-3.5 w-3.5" />
