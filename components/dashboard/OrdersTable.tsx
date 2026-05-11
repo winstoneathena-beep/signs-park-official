@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useOrders, type Order, type OrderStatus } from "@/lib/orders";
+import { userTag } from "@/lib/user-display";
 import { TEMPLATES_BY_ID, SIGN_TEMPLATES } from "@/lib/sign-templates";
 import { StatusBadge } from "./StatusBadge";
 import { OrderDetailDialog } from "./OrderDetailDialog";
@@ -138,9 +139,14 @@ export function OrdersTable() {
                         </div>
                       )}
                     </div>
-                    <div className="col-span-2 font-mono text-sm font-semibold">{o.id}</div>
-                    <div className="col-span-3 text-sm">
-                      {tpl ? `${tpl.number} — ${tpl.name}` : o.templateId}
+                    <div className="col-span-2 font-mono text-xs text-muted-foreground">
+                      {o.id}
+                    </div>
+                    <div className="col-span-3 text-sm font-semibold truncate">
+                      {tpl ? tpl.name : o.templateId}
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        — {userTag(o.createdBy.name, o.createdBy.role)}
+                      </span>
                     </div>
                     <div className="col-span-3 text-sm text-muted-foreground truncate">
                       {o.location}
@@ -190,6 +196,9 @@ export function OrdersTable() {
                     </div>
                     <div className="mt-1 text-sm font-semibold truncate">
                       {tpl ? tpl.name : o.templateId}
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        — {userTag(o.createdBy.name, o.createdBy.role)}
+                      </span>
                     </div>
                     <div className="mt-0.5 text-xs text-muted-foreground truncate">
                       {o.location}

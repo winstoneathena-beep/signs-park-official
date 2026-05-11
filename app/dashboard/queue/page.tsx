@@ -7,6 +7,7 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { OrderDetailDialog } from "@/components/dashboard/OrderDetailDialog";
 import { TEMPLATES_BY_ID } from "@/lib/sign-templates";
 import { useOrders, type Order } from "@/lib/orders";
+import { userTag } from "@/lib/user-display";
 
 export default function QueuePage() {
   const orders = useOrders();
@@ -62,14 +63,17 @@ export default function QueuePage() {
                       Pending review
                     </div>
                     <h3 className="mt-1.5 font-semibold truncate">
-                      {tpl ? `${tpl.number} — ${tpl.name}` : o.templateId}
+                      {tpl ? tpl.name : o.templateId}
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        — {userTag(o.createdBy.name, o.createdBy.role)}
+                      </span>
                     </h3>
                     <div className="mt-1 text-sm text-muted-foreground truncate">
                       {o.location}
                     </div>
                     <div className="mt-3 flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">
-                        {o.createdBy.name} · qty {o.specs.quantity}
+                      <span className="text-muted-foreground font-mono">
+                        {o.id} · qty {o.specs.quantity}
                       </span>
                       <span className="inline-flex items-center gap-1 font-semibold text-parkwell-blue">
                         Review <ArrowRight className="h-3.5 w-3.5" />

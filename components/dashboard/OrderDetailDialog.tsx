@@ -22,6 +22,8 @@ import { useRouter } from "next/navigation";
 import { TEMPLATES_BY_ID } from "@/lib/sign-templates";
 import { saveOrder, useSession, type Order } from "@/lib/orders";
 import { SignPreview } from "@/components/sign/SignPreview";
+import { userTag } from "@/lib/user-display";
+import { cn } from "@/lib/utils";
 import { StatusBadge } from "./StatusBadge";
 
 export function OrderDetailDialog({
@@ -36,15 +38,23 @@ export function OrderDetailDialog({
   const router = useRouter();
   const { session } = useSession();
   const [revisionNote, setRevisionNote] = useState("");
+  const [revisionError, setRevisionError] = useState(false);
+  const revisionRef = useRef<HTMLTextAreaElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
   if (!order) return null;
   const tpl = TEMPLATES_BY_ID[order.templateId];
 
   const isApprover = session.role === "approver";
+  const isCreator = order.createdBy.email === session.email;
   const canApprove = isApprover && order.status === "pending";
   const canMarkOrdered = isApprover && order.status === "approved";
-  const hasActionFooter = canApprove || canMarkOrdered;
+  // Creator can fix their own draft or rejected (revision-requested) orders.
+  // Pending orders are in the approver's queue — the creator can't edit while
+  // it's under review. Approved + ordered are permanently locked.
+  const canCreatorEdit =
+    isCreator && (order.status === "draft" || order.status === "rejected");
+  const hasActionFooter = canApprove || canMarkOrdered || canCreatorEdit;
 
   const downloadPng = async () => {
     if (!exportRef.current) return;
@@ -135,7 +145,13 @@ export function OrderDetailDialog({
   };
 
   const requestRevision = () => {
-    if (!revisionNote.trim()) return;
+    if (!revisionNote.trim()) {
+      // Make the missing requirement OBVIOUS instead of silently disabling.
+      setRevisionError(true);
+      revisionRef.current?.focus();
+      revisionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     saveOrder({
       ...order,
       status: "rejected",
@@ -148,6 +164,7 @@ export function OrderDetailDialog({
       updatedAt: Date.now(),
     });
     setRevisionNote("");
+    setRevisionError(false);
     onOpenChange(false);
   };
 
@@ -181,11 +198,17 @@ export function OrderDetailDialog({
               </span>
               <span className="text-muted-foreground">·</span>
               <DialogTitle className="text-base font-semibold truncate">
-                {tpl ? `${tpl.number} — ${tpl.name}` : order.templateId}
+                {tpl ? tpl.name : order.templateId}
+                <span className="ml-1 font-normal text-muted-foreground">
+                  — {userTag(order.createdBy.name, order.createdBy.role)}
+                </span>
               </DialogTitle>
             </div>
             <DialogTitle className="sm:hidden text-base font-semibold truncate">
               {tpl?.name ?? order.templateId}
+              <span className="ml-1 font-normal text-muted-foreground">
+                — {userTag(order.createdBy.name, order.createdBy.role)}
+              </span>
             </DialogTitle>
           </div>
           <Button
@@ -290,15 +313,30 @@ export function OrderDetailDialog({
               {canApprove && (
                 <Section
                   title="Revisions Needed"
-                  hint="Optional — required only if you're requesting changes."
+                  hint="Required to send back for changes."
+                  tone={revisionError ? "warning" : undefined}
                 >
                   <Textarea
+                    ref={revisionRef}
                     rows={3}
                     placeholder="What needs to change before this can be approved?"
                     value={revisionNote}
-                    onChange={(e) => setRevisionNote(e.target.value)}
-                    className="resize-none"
+                    onChange={(e) => {
+                      setRevisionNote(e.target.value);
+                      if (e.target.value.trim()) setRevisionError(false);
+                    }}
+                    aria-invalid={revisionError}
+                    className={cn(
+                      "resize-none",
+                      revisionError &&
+                        "border-parkwell-red focus-visible:ring-parkwell-red/40",
+                    )}
                   />
+                  {revisionError && (
+                    <p className="mt-2 text-xs text-parkwell-red">
+                      Add a short note about what needs changing — the requester needs to know what to fix.
+                    </p>
+                  )}
                 </Section>
               )}
             </div>
@@ -325,8 +363,7 @@ export function OrderDetailDialog({
                   <Button
                     variant="outline"
                     onClick={requestRevision}
-                    disabled={!revisionNote.trim()}
-                    className="h-11 rounded-full border-2 border-parkwell-red/40 text-parkwell-red hover:bg-parkwell-red/10 hover:text-parkwell-red disabled:opacity-50 px-5"
+                    className="h-11 rounded-full border-2 border-parkwell-red/40 text-parkwell-red hover:bg-parkwell-red/10 hover:text-parkwell-red px-5"
                   >
                     <Send className="h-4 w-4 mr-1.5" />
                     Request Revision
@@ -339,6 +376,21 @@ export function OrderDetailDialog({
                     Approve
                   </Button>
                 </div>
+              </>
+            ) : canCreatorEdit ? (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  {order.status === "rejected"
+                    ? "Revisions were requested. Update and resubmit."
+                    : "Draft — only you can see this until you submit."}
+                </p>
+                <Button
+                  onClick={editSign}
+                  className="h-11 rounded-full bg-parkwell-blue text-white hover:bg-parkwell-blue/90 shadow-md shadow-parkwell-blue/30 px-7"
+                >
+                  <Pencil className="h-4 w-4 mr-1.5" />
+                  {order.status === "rejected" ? "Edit & Resubmit" : "Edit Sign"}
+                </Button>
               </>
             ) : (
               <>

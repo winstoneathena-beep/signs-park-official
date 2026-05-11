@@ -258,6 +258,12 @@ export function deleteOrder(id: string) {
   writeOrders(readOrders().filter((o) => o.id !== id));
 }
 
+/** Synchronous order lookup — safe to call from useState initializers. */
+export function getOrderById(id: string): Order | null {
+  if (typeof window === "undefined") return null;
+  return readOrders().find((o) => o.id === id) ?? null;
+}
+
 export function statusLabel(s: OrderStatus): string {
   return {
     draft: "Draft",
@@ -284,6 +290,24 @@ export function setOnboarded(value: boolean) {
 export function chooseRole(role: Role) {
   const current = readSession();
   writeSession({ ...current, role });
+  setOnboarded(true);
+}
+
+/**
+ * Sign in with full accountability data. Called from the welcome page once
+ * the user has entered their name, email, and picked a role. Atomically
+ * updates the session and marks onboarded so the gate releases.
+ */
+export function signIn({
+  name,
+  email,
+  role,
+}: {
+  name: string;
+  email: string;
+  role: Role;
+}) {
+  writeSession({ name: name.trim(), email: email.trim(), role });
   setOnboarded(true);
 }
 

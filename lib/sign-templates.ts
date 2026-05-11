@@ -146,7 +146,8 @@ const SIGN_01: SignTemplate = {
       id: "qrCode",
       label: "QR code",
       type: "qr-image",
-      bbox: { x: 0.21, y: 0.183, w: 0.58, h: 0.32 },
+      // Square in pixel space (1715×1715) so a square upload fills exactly.
+      bbox: { x: 0.202, y: 0.217, w: 0.595, h: 0.397 },
       placeholder: "",
       style: {
         color: C.ink,
@@ -232,7 +233,8 @@ const SIGN_02: SignTemplate = {
       id: "qrCode",
       label: "QR code",
       type: "qr-image",
-      bbox: { x: 0.05, y: 0.32, w: 0.27, h: 0.5 },
+      // Square in pixel space (~738×738) so square QR upload fits.
+      bbox: { x: 0.078, y: 0.330, w: 0.205, h: 0.308 },
       placeholder: "",
       style: { color: C.ink, bgColor: C.white, fontWeight: 400, fontSize: 0.02 },
     },
@@ -240,7 +242,8 @@ const SIGN_02: SignTemplate = {
       id: "qrCaption",
       label: "QR caption",
       type: "headline",
-      bbox: { x: 0.05, y: 0.83, w: 0.27, h: 0.09 },
+      // Inside the rounded dark container, just below the QR.
+      bbox: { x: 0.06, y: 0.65, w: 0.24, h: 0.07 },
       placeholder: "SCAN TO PAY",
       style: {
         color: C.white,
@@ -461,18 +464,19 @@ const SIGN_04: SignTemplate = {
     },
     {
       id: "valetRates",
-      label: "Valet rates",
-      type: "rate-table",
+      label: "Valet rates (one per line: PRICE   DURATION)",
+      type: "body",
       bbox: { x: 0.1, y: 0.31, w: 0.8, h: 0.21 },
-      placeholder: "",
+      placeholder:
+        "$20    0-4 hour\n$32    4-8 hours\n$53    8+ hours\n$53    Overnight",
       style: {
         color: C.white,
         bgColor: C.blue,
-        fontWeight: 500,
-        fontSize: 0.034,
+        fontWeight: 700,
+        fontSize: 0.038,
         align: "left",
-        valign: "top",
-        columnSplit: 0.3,
+        valign: "center",
+        lineHeight: 1.35,
       },
       constraints: { maxRows: 6 },
     },
@@ -596,6 +600,45 @@ const SIGN_05: SignTemplate = {
       constraints: { maxChars: 22 },
     },
   ],
+};
+
+/* ------------------------------------------------------------------------- */
+/* Sign #5b — Marquee, no rates (Public Parking only)                        */
+/* ------------------------------------------------------------------------- */
+
+const SIGN_05B: SignTemplate = {
+  id: "marquee-no-rates",
+  number: "05b",
+  name: "Marquee — Public Parking",
+  description:
+    "Square marquee variant without the rate strip. Same P-mark and headline as #5, for lots where rates aren't shown on the marquee.",
+  category: "rate-sign",
+  sourceImage: "/sign-templates/05b-marquee-no-rates.png",
+  aspectRatio: 1,
+  sizes: squareSizes([24, 30, 36, 42, 48, 54, 60, 72, 84, 96]),
+  materials: ["Aluminium", "Dibond"],
+  editableFields: [
+    {
+      id: "headline",
+      label: "Headline (right of P-mark)",
+      type: "headline",
+      bbox: { x: 0.36, y: 0.31, w: 0.6, h: 0.32 },
+      placeholder: "PUBLIC\nPARKING",
+      style: {
+        color: C.white,
+        bgColor: C.blue,
+        fontWeight: 800,
+        fontSize: 0.13,
+        align: "left",
+        valign: "center",
+        transform: "uppercase",
+        lineHeight: 1.0,
+      },
+      constraints: { maxChars: 18, maxRows: 2 },
+    },
+  ],
+  rationale:
+    "Cropped from #5 above the rate strip and squared with parkwell-blue padding. No stretching of brand elements.",
 };
 
 /* ------------------------------------------------------------------------- */
@@ -1147,10 +1190,11 @@ const SIGN_12: SignTemplate = {
     },
     {
       id: "ratesContent",
-      label: "Parking rates",
-      type: "rate-table",
+      label: "Parking rates (one per line)",
+      type: "body",
       bbox: { x: 0.05, y: 0.32, w: 0.45, h: 0.18 },
-      placeholder: "",
+      placeholder:
+        "$10.00    WEEKDAY RATE\n$5.00     NIGHTS\n$5.00     WEEKENDS",
       style: {
         color: C.ink,
         bgColor: C.white,
@@ -1158,7 +1202,7 @@ const SIGN_12: SignTemplate = {
         fontSize: 0.022,
         align: "left",
         valign: "top",
-        columnSplit: 0.45,
+        lineHeight: 1.55,
       },
     },
     {
@@ -1225,6 +1269,7 @@ export const SIGN_TEMPLATES: SignTemplate[] = [
   SIGN_03,
   SIGN_04,
   SIGN_05,
+  SIGN_05B,
   SIGN_06,
   SIGN_07,
   SIGN_08,

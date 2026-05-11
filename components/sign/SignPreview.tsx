@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useLayoutEffect, useRef } from "react";
 import Image from "next/image";
 import type { SignTemplate, EditableField } from "@/lib/sign-templates";
 import { cn } from "@/lib/utils";
@@ -78,6 +78,7 @@ export const SignPreview = forwardRef<HTMLDivElement, Props>(function SignPrevie
           width={width}
           height={height}
           showZones={showZones}
+          forExport={forExport}
         />
       ))}
     </div>
@@ -92,12 +93,14 @@ function FieldOverlay({
   width,
   height,
   showZones,
+  forExport,
 }: {
   field: EditableField;
   value: string | string[] | RateRow[] | undefined;
   width: number;
   height: number;
   showZones: boolean;
+  forExport: boolean;
 }) {
   const { bbox, style, type } = field;
   const px = {
@@ -109,9 +112,48 @@ function FieldOverlay({
   const fontSize = style.fontSize * height;
   const outline = showZones ? "1px dashed rgba(255,255,255,0.6)" : undefined;
 
-  /* QR image */
+  /* Decide whether to render an overlay at all. Empty fields render nothing —
+     the underlying PNG (which has the brand-guide canonical content) shows
+     through. Only when the user has typed/uploaded do we render the overlay
+     with bg fill that masks the PNG. */
+  const hasValue = (() => {
+    if (type === "qr-image") return typeof value === "string" && value.length > 0;
+    if (type === "rate-table")
+      return (
+        Array.isArray(value) &&
+        value.length > 0 &&
+        typeof value[0] === "object"
+      );
+    if (type === "list")
+      return (
+        Array.isArray(value) &&
+        (value as unknown[]).some(
+          (v) => typeof v === "string" && (v as string).length > 0,
+        )
+      );
+    return typeof value === "string" && value.length > 0;
+  })();
+
+  if (!hasValue) {
+    // Show a thin outline in editor mode (showZones=true on step 1) so the
+    // user knows where the editable region sits, without painting over PNG.
+    return showZones && !forExport ? (
+      <div
+        style={{
+          position: "absolute",
+          ...px,
+          outline: "1px dashed rgba(255,255,255,0.45)",
+          outlineOffset: "-1px",
+          pointerEvents: "none",
+        }}
+        aria-hidden
+      />
+    ) : null;
+  }
+
+  /* QR image — uploaded; replace the PNG placeholder with the user's image. */
   if (type === "qr-image") {
-    const src = typeof value === "string" && value.length > 0 ? value : null;
+    const src = value as string;
     return (
       <div
         style={{
@@ -123,40 +165,20 @@ function FieldOverlay({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          zIndex: 10,
         }}
       >
-        {src ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={src}
-            alt="QR code"
-            style={{
-              maxWidth: "100%",
-              maxHeight: "100%",
-              objectFit: "contain",
-            }}
-            draggable={false}
-          />
-        ) : (
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              border: "2px dashed rgba(10,32,46,0.25)",
-              borderRadius: "6px",
-              color: "rgba(10,32,46,0.55)",
-              fontSize: Math.max(10, fontSize * 0.7),
-              textAlign: "center",
-              padding: "8%",
-              fontFamily: "var(--font-sans)",
-            }}
-          >
-            Upload QR code
-          </div>
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt="QR code"
+          style={{
+            maxWidth: "100%",
+            maxHeight: "100%",
+            objectFit: "contain",
+          }}
+          draggable={false}
+        />
       </div>
     );
   }
@@ -176,6 +198,7 @@ function FieldOverlay({
           color: style.color,
           fontFamily: "var(--font-sans)",
           outline,
+          zIndex: 10,
         }}
       >
         <RateTable
@@ -191,12 +214,20 @@ function FieldOverlay({
 
   /* List with bullets */
   if (type === "list") {
-    const items: string[] = Array.isArray(value)
-      ? (value as string[]).filter((v) => typeof v === "string")
-      : Array.isArray(field.placeholder)
-        ? (field.placeholder as string[])
-        : [];
-    const list = items.length > 0 ? items : (field.placeholder as string[]);
+    const list = (value as string[]).filter(
+      (v) => typeof v === "string" && v.length > 0,
+    );
+    const listText = list.join("\n");
+    const listFontSize = autoFit({
+      text: listText,
+      baseFontSize: fontSize,
+      boxW: px.width,
+      boxH: px.height,
+      lineHeight: style.lineHeight ?? 1.35,
+      fontWeight: style.fontWeight,
+      // bullet glyph adds a few chars of width
+      extraCharsPerLine: 2,
+    });
     return (
       <div
         style={{
@@ -206,7 +237,7 @@ function FieldOverlay({
           color: style.color,
           fontFamily: "var(--font-sans)",
           fontWeight: style.fontWeight,
-          fontSize,
+          fontSize: listFontSize,
           lineHeight: style.lineHeight ?? 1.35,
           textAlign: style.align ?? "left",
           textTransform: style.transform ?? "none",
@@ -219,9 +250,11 @@ function FieldOverlay({
               : style.valign === "bottom"
                 ? "flex-end"
                 : "center",
-          padding: `${fontSize * 0.3}px ${fontSize * 0.5}px`,
-          gap: `${fontSize * 0.25}px`,
+          padding: `${px.height * 0.04}px ${px.width * 0.03}px`,
+          gap: `${listFontSize * 0.25}px`,
+          overflow: "hidden",
           outline,
+          zIndex: 10,
         }}
       >
         {list.map((item, i) => (
@@ -237,6 +270,7 @@ function FieldOverlay({
                   : style.align === "right"
                     ? "flex-end"
                     : "flex-start",
+              width: "100%",
             }}
           >
             <span
@@ -249,7 +283,16 @@ function FieldOverlay({
             >
               {bulletMarker(style.bulletStyle, i)}
             </span>
-            <span style={{ flex: "0 1 auto" }}>{item || " "}</span>
+            <span
+              style={{
+                flex: "1 1 0%",
+                minWidth: 0,
+                wordBreak: "break-word",
+                overflowWrap: "break-word",
+              }}
+            >
+              {item || " "}
+            </span>
           </div>
         ))}
       </div>
@@ -258,11 +301,8 @@ function FieldOverlay({
 
   /* Vertical word stack — Delineator */
   if (field.id === "directionWord") {
-    const text =
-      typeof value === "string" && value.length > 0
-        ? value
-        : (field.placeholder as string);
-    const letters = text.toUpperCase().split("");
+    const text = (value as string).toUpperCase();
+    const letters = text.split("");
     return (
       <div
         style={{
@@ -280,6 +320,7 @@ function FieldOverlay({
           alignItems: "center",
           padding: `${fontSize * 0.3}px 0`,
           outline,
+          zIndex: 10,
         }}
       >
         {letters.map((l, i) => (
@@ -291,13 +332,87 @@ function FieldOverlay({
     );
   }
 
-  /* Default: text / headline / body */
-  const text =
-    typeof value === "string" && value.length > 0
-      ? value
-      : Array.isArray(field.placeholder)
-        ? (field.placeholder as string[]).join("\n")
-        : (field.placeholder as string);
+  /* Default: text / headline / body — only reached when hasValue is true. */
+  const text = value as string;
+
+  return (
+    <TextOverlay
+      text={text}
+      px={px}
+      baseFontSize={fontSize}
+      style={style}
+      outline={outline}
+    />
+  );
+}
+
+/* ----------------------- TextOverlay (shrink-to-fit) ----------------------- */
+
+/**
+ * Renders text inside a fixed bbox. The text starts at `baseFontSize` (the
+ * brand-correct size for that field). After mount, we measure the content's
+ * natural width/height and apply a CSS `transform: scale(...)` so it fits
+ * inside the bbox, anchored to the field's alignment. No React state — we
+ * mutate the element style directly inside useLayoutEffect, which runs before
+ * paint, so there's no flash on each keystroke.
+ */
+function TextOverlay({
+  text,
+  px,
+  baseFontSize,
+  style,
+  outline,
+}: {
+  text: string;
+  px: { left: number; top: number; width: number; height: number };
+  baseFontSize: number;
+  style: EditableField["style"];
+  outline?: string;
+}) {
+  const innerRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    // Reset for measurement, then scale to fit. Direct mutation — no React
+    // state, so no extra render cycle and no flash.
+    el.style.transform = "scale(1)";
+    const rect = el.getBoundingClientRect();
+    const naturalW = rect.width;
+    const naturalH = rect.height;
+    if (naturalW > 0 && naturalH > 0) {
+      const availW = px.width * 0.94;
+      const availH = px.height * 0.92;
+      const scale = Math.max(
+        0.4,
+        Math.min(1, availW / naturalW, availH / naturalH),
+      );
+      el.style.transform = `scale(${scale})`;
+    }
+    // Re-runs whenever any of these change.
+  }, [text, baseFontSize, px.width, px.height, style.lineHeight, style.fontWeight]);
+
+  const align = style.align ?? "center";
+  const valign = style.valign ?? "center";
+
+  const justifyContent =
+    align === "center"
+      ? "center"
+      : align === "right"
+        ? "flex-end"
+        : "flex-start";
+  const alignItems =
+    valign === "top"
+      ? "flex-start"
+      : valign === "bottom"
+        ? "flex-end"
+        : "center";
+  const transformOrigin =
+    align === "center"
+      ? "center center"
+      : align === "right"
+        ? "right center"
+        : "left center";
 
   return (
     <div
@@ -305,36 +420,32 @@ function FieldOverlay({
         position: "absolute",
         ...px,
         background: style.bgColor,
-        color: style.color,
-        fontWeight: style.fontWeight,
-        fontSize,
-        lineHeight: style.lineHeight ?? 1.15,
-        textAlign: style.align ?? "center",
-        textTransform: style.transform ?? "none",
-        fontStyle: style.italic ? "italic" : "normal",
-        fontFamily: "var(--font-sans)",
         display: "flex",
-        flexDirection: "column",
-        justifyContent:
-          style.valign === "top"
-            ? "flex-start"
-            : style.valign === "bottom"
-              ? "flex-end"
-              : "center",
-        alignItems:
-          style.align === "left"
-            ? "flex-start"
-            : style.align === "right"
-              ? "flex-end"
-              : "center",
-        padding: `${fontSize * 0.2}px ${fontSize * 0.45}px`,
-        whiteSpace: "pre-wrap",
+        alignItems,
+        justifyContent,
+        padding: `${px.height * 0.04}px ${px.width * 0.03}px`,
+        overflow: "hidden",
         outline,
+        zIndex: 10,
       }}
     >
-      {text.split("\n").map((line, i) => (
-        <span key={i}>{line || " "}</span>
-      ))}
+      <div
+        ref={innerRef}
+        style={{
+          color: style.color,
+          fontFamily: "var(--font-sans)",
+          fontSize: baseFontSize,
+          fontWeight: style.fontWeight,
+          lineHeight: style.lineHeight ?? 1.15,
+          textTransform: style.transform ?? "none",
+          fontStyle: style.italic ? "italic" : "normal",
+          textAlign: align,
+          whiteSpace: "pre",
+          transformOrigin,
+        }}
+      >
+        {text}
+      </div>
     </div>
   );
 }
@@ -356,6 +467,52 @@ function bulletMarker(
     default:
       return "•";
   }
+}
+
+/**
+ * Estimate a font size that fits the longest line of `text` inside a box of
+ * `boxW` × `boxH`. No DOM measurement — uses an empirically-tuned character
+ * width ratio for Montserrat. Returns a value between 40 % and 100 % of
+ * `baseFontSize`. The renderer's `wordBreak` keeps anything pathological from
+ * overflowing in the rare case content still doesn't fit at the floor.
+ */
+function autoFit({
+  text,
+  baseFontSize,
+  boxW,
+  boxH,
+  lineHeight,
+  fontWeight,
+  extraCharsPerLine = 0,
+}: {
+  text: string;
+  baseFontSize: number;
+  boxW: number;
+  boxH: number;
+  lineHeight: number;
+  fontWeight: number;
+  extraCharsPerLine?: number;
+}): number {
+  const lines = text.split("\n");
+  const longest = Math.max(
+    1,
+    ...lines.map((l) => l.length + extraCharsPerLine),
+  );
+  // Montserrat: bold is wider than regular. Approximate em-widths for the
+  // worst-case (uppercase-heavy) string. These values are tuned conservatively
+  // — better to slightly under-fill than to spill over the bbox.
+  const charWidthRatio = fontWeight >= 700 ? 0.62 : 0.56;
+
+  // Use ~6 % padding inset so text doesn't kiss the bbox edge.
+  const usableW = boxW * 0.94;
+  const usableH = boxH * 0.92;
+
+  const maxByWidth = usableW / (longest * charWidthRatio);
+  const maxByHeight = usableH / (lineHeight * lines.length);
+
+  const fitted = Math.min(maxByWidth, maxByHeight);
+  const floor = baseFontSize * 0.4;
+  return Math.max(floor, Math.min(baseFontSize, fitted));
 }
 
 /* ------------------------------ Rate table ------------------------------ */

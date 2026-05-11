@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
@@ -8,9 +9,11 @@ import {
   CheckCircle2,
   ArrowRight,
   Lock,
+  User,
+  Mail,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
-import { chooseRole, type Role } from "@/lib/orders";
+import { signIn, type Role } from "@/lib/orders";
 import { cn } from "@/lib/utils";
 
 const ROLES: {
@@ -50,11 +53,27 @@ const ROLES: {
   },
 ];
 
+/** Lightweight email check — not RFC-perfect, just sane: x@y.z */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function WelcomePage() {
   const router = useRouter();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [attempted, setAttempted] = useState(false);
+
+  const trimmedName = name.trim();
+  const trimmedEmail = email.trim();
+  const nameOk = trimmedName.length >= 2;
+  const emailOk = EMAIL_RE.test(trimmedEmail);
+  const canProceed = nameOk && emailOk;
 
   const pick = (role: Role) => {
-    chooseRole(role);
+    if (!canProceed) {
+      setAttempted(true);
+      return;
+    }
+    signIn({ name: trimmedName, email: trimmedEmail, role });
     router.replace("/");
   };
 
@@ -94,76 +113,153 @@ export default function WelcomePage() {
           <h1 className="mt-6 text-balance text-[clamp(2.5rem,6vw,4.5rem)] font-bold leading-[1.05] tracking-tight">
             Welcome.
             <br />
-            Tell us how you&rsquo;re using the platform.
+            Tell us who you are.
           </h1>
           <p className="mt-5 max-w-2xl text-base sm:text-lg leading-relaxed text-white/70">
-            Pick the role that matches what you&rsquo;re here to do today. You can switch
-            anytime from the dashboard.
+            Every sign order is tied to a name and email — for approval routing,
+            order history, and accountability. Fill these in, then pick the role
+            that matches what you&rsquo;re here to do today.
           </p>
         </motion.div>
 
-        <div className="mt-14 grid gap-5 md:grid-cols-2">
-          {ROLES.map((r, i) => (
-            <motion.button
-              key={r.id}
-              type="button"
-              onClick={() => pick(r.id)}
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
-              whileHover={{ y: -4 }}
-              className={cn(
-                "group relative text-left rounded-3xl p-7 md:p-9 border transition-colors",
-                "bg-white/5 backdrop-blur border-white/10 hover:border-parkwell-blue/60 hover:bg-white/[0.07]",
-              )}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-parkwell-blue/15 text-parkwell-blue ring-1 ring-parkwell-blue/30">
-                  <r.Icon className="h-6 w-6" />
-                </div>
-                <span className="inline-flex items-center justify-center h-10 w-10 rounded-full border border-white/15 group-hover:border-parkwell-blue group-hover:bg-parkwell-blue group-hover:text-white transition-colors">
-                  <ArrowRight className="h-4 w-4" />
-                </span>
-              </div>
+        {/* Accountability fields */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          className="mt-10 max-w-2xl rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur p-5 md:p-6"
+        >
+          <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/45 mb-4">
+            Step 1 — Identify yourself
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FieldOnDark
+              icon={User}
+              label="Full name"
+              placeholder="e.g. Andre Gurule"
+              value={name}
+              onChange={setName}
+              showError={attempted && !nameOk}
+              errorText="Please enter your full name."
+              autoComplete="name"
+            />
+            <FieldOnDark
+              icon={Mail}
+              label="Work email"
+              placeholder="e.g. andre@goparkwell.com"
+              value={email}
+              onChange={setEmail}
+              showError={attempted && !emailOk}
+              errorText="Please enter a valid work email."
+              type="email"
+              autoComplete="email"
+            />
+          </div>
+        </motion.div>
 
-              <h2 className="mt-6 text-2xl md:text-3xl font-bold tracking-tight">
-                {r.title}
-              </h2>
-              <p className="mt-3 text-sm md:text-base text-white/65 leading-relaxed">
-                {r.blurb}
-              </p>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.28, ease: [0.16, 1, 0.3, 1] }}
+          className="mt-8 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/45"
+        >
+          Step 2 — Pick your role
+        </motion.div>
 
-              <div className="mt-7 pt-5 border-t border-white/10 space-y-2.5">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
-                  What you can do
+        <div className="mt-4 grid gap-5 md:grid-cols-2">
+          {ROLES.map((r, i) => {
+            const disabled = !canProceed;
+            return (
+              <motion.button
+                key={r.id}
+                type="button"
+                onClick={() => pick(r.id)}
+                aria-disabled={disabled}
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 + i * 0.08, ease: [0.16, 1, 0.3, 1] }}
+                whileHover={disabled ? undefined : { y: -4 }}
+                className={cn(
+                  "group relative text-left rounded-3xl p-7 md:p-9 border transition-colors",
+                  "bg-white/5 backdrop-blur border-white/10",
+                  disabled
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:border-parkwell-blue/60 hover:bg-white/[0.07] cursor-pointer",
+                )}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-parkwell-blue/15 text-parkwell-blue ring-1 ring-parkwell-blue/30">
+                    <r.Icon className="h-6 w-6" />
+                  </div>
+                  <span
+                    className={cn(
+                      "inline-flex items-center justify-center h-10 w-10 rounded-full border border-white/15 transition-colors",
+                      !disabled &&
+                        "group-hover:border-parkwell-blue group-hover:bg-parkwell-blue group-hover:text-white",
+                    )}
+                  >
+                    <ArrowRight className="h-4 w-4" />
+                  </span>
                 </div>
-                <ul className="space-y-2">
-                  {r.can.map((c) => (
-                    <li key={c} className="flex items-start gap-2 text-sm text-white/85">
-                      <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-parkwell-green" />
-                      <span>{c}</span>
-                    </li>
-                  ))}
-                </ul>
-                {r.cant && r.cant.length > 0 && (
-                  <ul className="pt-2 space-y-2">
-                    {r.cant.map((c) => (
-                      <li key={c} className="flex items-start gap-2 text-sm text-white/45">
-                        <Lock className="h-4 w-4 mt-0.5 shrink-0" />
+
+                <h2 className="mt-6 text-2xl md:text-3xl font-bold tracking-tight">
+                  {r.title}
+                </h2>
+                <p className="mt-3 text-sm md:text-base text-white/65 leading-relaxed">
+                  {r.blurb}
+                </p>
+
+                <div className="mt-7 pt-5 border-t border-white/10 space-y-2.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                    What you can do
+                  </div>
+                  <ul className="space-y-2">
+                    {r.can.map((c) => (
+                      <li
+                        key={c}
+                        className="flex items-start gap-2 text-sm text-white/85"
+                      >
+                        <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-parkwell-green" />
                         <span>{c}</span>
                       </li>
                     ))}
                   </ul>
-                )}
-              </div>
+                  {r.cant && r.cant.length > 0 && (
+                    <ul className="pt-2 space-y-2">
+                      {r.cant.map((c) => (
+                        <li
+                          key={c}
+                          className="flex items-start gap-2 text-sm text-white/45"
+                        >
+                          <Lock className="h-4 w-4 mt-0.5 shrink-0" />
+                          <span>{c}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
 
-              <div
-                className="absolute inset-x-0 bottom-0 h-1 rounded-b-3xl bg-gradient-to-r from-parkwell-blue to-parkwell-green opacity-0 group-hover:opacity-100 transition-opacity"
-                aria-hidden
-              />
-            </motion.button>
-          ))}
+                <div
+                  className={cn(
+                    "absolute inset-x-0 bottom-0 h-1 rounded-b-3xl bg-gradient-to-r from-parkwell-blue to-parkwell-green transition-opacity",
+                    disabled ? "opacity-0" : "opacity-0 group-hover:opacity-100",
+                  )}
+                  aria-hidden
+                />
+              </motion.button>
+            );
+          })}
         </div>
+
+        {attempted && !canProceed && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-6 text-sm text-parkwell-red text-center"
+          >
+            Fill in your name and a valid work email before picking a role.
+          </motion.p>
+        )}
 
         <motion.p
           initial={{ opacity: 0 }}
@@ -171,9 +267,63 @@ export default function WelcomePage() {
           transition={{ delay: 0.7, duration: 0.6 }}
           className="mt-10 text-center text-xs text-white/40"
         >
-          Your selection is saved on this device. Sign out anytime from the dashboard.
+          Your information is saved on this device. Sign out anytime from the dashboard.
         </motion.p>
       </div>
     </div>
+  );
+}
+
+/* ----- Dark-themed text field for the welcome page ----- */
+
+function FieldOnDark({
+  icon: Icon,
+  label,
+  placeholder,
+  value,
+  onChange,
+  showError,
+  errorText,
+  type = "text",
+  autoComplete,
+}: {
+  icon: React.ElementType;
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+  showError?: boolean;
+  errorText?: string;
+  type?: string;
+  autoComplete?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
+        {label}
+      </span>
+      <div className="mt-1.5 relative">
+        <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 pointer-events-none" />
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          className={cn(
+            "w-full h-11 rounded-full bg-white/5 border pl-10 pr-4 text-sm text-white",
+            "placeholder:text-white/35 placeholder:font-normal placeholder:italic",
+            "focus:outline-none focus:ring-2 focus:ring-parkwell-blue/60 focus:border-parkwell-blue/60",
+            "transition-colors",
+            showError
+              ? "border-parkwell-red/60"
+              : "border-white/15 hover:border-white/25",
+          )}
+        />
+      </div>
+      {showError && errorText && (
+        <span className="mt-1.5 block text-[11px] text-parkwell-red">{errorText}</span>
+      )}
+    </label>
   );
 }

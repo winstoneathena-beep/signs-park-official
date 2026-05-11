@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { LayoutDashboard, Files, ShieldCheck, Library, Plus, LogOut } from "lucide-react";
 import { useSession, signOut } from "@/lib/orders";
+import { roleAbbrev } from "@/lib/user-display";
 import { RoleSwitcher } from "./RoleSwitcher";
 import { cn } from "@/lib/utils";
 
@@ -32,8 +33,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             {session.role === "approver" ? "Approver dashboard" : "Requester dashboard"}
           </div>
           <h1 className="mt-1.5 text-3xl md:text-4xl font-bold tracking-tight">
-            Welcome back, {session.name.split(" ")[0]}.
+            Welcome back, {session.name.split(" ")[0]}{" "}
+            <span className="text-muted-foreground font-medium text-2xl md:text-3xl">
+              ({roleAbbrev(session.role)})
+            </span>
           </h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Signed in as <span className="font-semibold">{session.name}</span>{" "}
+            · {session.email}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <RoleSwitcher />

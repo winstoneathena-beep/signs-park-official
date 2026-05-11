@@ -7,6 +7,7 @@ import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/site/ThemeToggle";
 import { useSession } from "@/lib/orders";
+import { userTag } from "@/lib/user-display";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -34,9 +35,9 @@ export function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { session } = useSession();
   const RoleIcon = session.role === "approver" ? ShieldCheck : Pencil;
-  const roleLabel = session.role === "approver" ? "Approver" : "Requester";
   const roleAccent =
     session.role === "approver" ? "text-parkwell-green" : "text-parkwell-blue";
+  const identity = userTag(session.name, session.role);
 
   return (
     <header
@@ -69,9 +70,10 @@ export function SiteHeader() {
           <Link
             href="/dashboard"
             className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title="Open dashboard"
           >
             <RoleIcon className={cn("h-3.5 w-3.5", roleAccent)} />
-            {roleLabel}
+            {identity}
           </Link>
           <ThemeToggle />
           <Button

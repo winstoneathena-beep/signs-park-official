@@ -8,6 +8,7 @@ import { OrderDetailDialog } from "@/components/dashboard/OrderDetailDialog";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import { TEMPLATES_BY_ID } from "@/lib/sign-templates";
 import { useOrders, type Order, type OrderStatus } from "@/lib/orders";
+import { userTag } from "@/lib/user-display";
 import { cn } from "@/lib/utils";
 
 export default function DashboardPage() {
@@ -81,13 +82,13 @@ export default function DashboardPage() {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 text-sm font-semibold truncate">
-                      {o.id}
+                      {TEMPLATES_BY_ID[o.templateId]?.name ?? o.templateId}
                       <span className="text-muted-foreground font-normal">
-                        · {TEMPLATES_BY_ID[o.templateId]?.name ?? o.templateId}
+                        — {userTag(o.createdBy.name, o.createdBy.role)}
                       </span>
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground truncate">
-                      {o.location} · {o.createdBy.name} · qty {o.specs.quantity}
+                    <div className="mt-1 text-xs text-muted-foreground truncate font-mono">
+                      {o.id} · {o.location} · qty {o.specs.quantity}
                     </div>
                   </div>
                   <StatusBadge status={o.status} />

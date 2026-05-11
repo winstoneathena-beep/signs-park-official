@@ -32,7 +32,13 @@ import {
   type FieldValues,
   type RateRow,
 } from "@/components/sign/SignPreview";
-import { nextOrderId, saveOrder, useSession, type Order } from "@/lib/orders";
+import {
+  getOrderById,
+  nextOrderId,
+  saveOrder,
+  useSession,
+  type Order,
+} from "@/lib/orders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,21 +61,57 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
   const { session } = useSession();
 
   const tplFromQuery = params.get("template");
+  const orderIdFromQuery = params.get("order");
+
+  // If ?order= present, load that order on first render and pre-populate every
+  // field from it. We're now editing, not creating.
+  const [editingOrder, setEditingOrder] = useState<Order | null>(() =>
+    orderIdFromQuery ? getOrderById(orderIdFromQuery) : null,
+  );
+
+  // Permission check — keep in sync with OrderDetailDialog.
+  const canEditExisting = editingOrder
+    ? (() => {
+        const isApprover = session.role === "approver";
+        const isCreator = editingOrder.createdBy.email === session.email;
+        if (editingOrder.status === "approved" || editingOrder.status === "ordered")
+          return false;
+        if (isApprover && editingOrder.status === "pending") return true;
+        if (
+          isCreator &&
+          (editingOrder.status === "draft" || editingOrder.status === "rejected")
+        )
+          return true;
+        return false;
+      })()
+    : true; // creating a new sign — always allowed
+
   const [templateId, setTemplateId] = useState<string>(
-    initialTemplateId || tplFromQuery || SIGN_TEMPLATES[2].id, // default Standard Rate
+    editingOrder?.templateId ||
+      initialTemplateId ||
+      tplFromQuery ||
+      SIGN_TEMPLATES[2].id,
   );
   const template = TEMPLATES_BY_ID[templateId] ?? SIGN_TEMPLATES[2];
 
-  const [values, setValues] = useState<FieldValues>(() =>
-    initFieldValues(template),
+  const [values, setValues] = useState<FieldValues>(
+    () => editingOrder?.values ?? initFieldValues(template),
   );
-  const [size, setSize] = useState<SignSize>(() => defaultSize(template));
+  const [size, setSize] = useState<SignSize>(() =>
+    editingOrder
+      ? {
+          widthIn: editingOrder.specs.widthIn,
+          heightIn: editingOrder.specs.heightIn,
+        }
+      : defaultSize(template),
+  );
   const [specs, setSpecs] = useState({
-    quantity: 1,
-    material: template.materials[0] ?? "Aluminium",
-    notes: "",
+    quantity: editingOrder?.specs.quantity ?? 1,
+    material:
+      editingOrder?.specs.material ?? template.materials[0] ?? "Aluminium",
+    notes: editingOrder?.specs.notes ?? "",
   });
-  const [location, setLocation] = useState("");
+  const [location, setLocation] = useState(editingOrder?.location ?? "");
   const [step, setStep] = useState<Step>("content");
   const [submittedOrderId, setSubmittedOrderId] = useState<string | null>(null);
 
@@ -160,48 +202,129 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
   };
 
   const submit = (status: Order["status"]) => {
-    const id = submittedOrderId || nextOrderId();
-    const order: Order = {
-      id,
-      templateId: template.id,
-      status,
-      values,
-      specs: {
-        widthIn: size.widthIn,
-        heightIn: size.heightIn,
-        quantity: specs.quantity,
-        material: specs.material,
-        notes: specs.notes,
-      },
-      location: location || `${template.name} — ${session.name}`,
-      createdBy: session,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+    const commonSpecs = {
+      widthIn: size.widthIn,
+      heightIn: size.heightIn,
+      quantity: specs.quantity,
+      material: specs.material,
+      notes: specs.notes,
     };
-    saveOrder(order);
-    setSubmittedOrderId(id);
+
+    let savedId: string;
+
+    if (editingOrder) {
+      // Update existing — preserve id, createdBy, createdAt. The status passed
+      // in wins (so "Save changes" can keep pending, "Submit" can re-raise a
+      // rejected sign back to pending, etc.).
+      savedId = editingOrder.id;
+      saveOrder({
+        ...editingOrder,
+        templateId: template.id,
+        status,
+        values,
+        specs: commonSpecs,
+        location: location || editingOrder.location,
+        updatedAt: Date.now(),
+      });
+      // Keep the editingOrder reference fresh for subsequent saves on the same screen.
+      setEditingOrder({
+        ...editingOrder,
+        templateId: template.id,
+        status,
+        values,
+        specs: commonSpecs,
+        location: location || editingOrder.location,
+        updatedAt: Date.now(),
+      });
+    } else {
+      // Create new.
+      savedId = submittedOrderId || nextOrderId();
+      saveOrder({
+        id: savedId,
+        templateId: template.id,
+        status,
+        values,
+        specs: commonSpecs,
+        location: location || `${template.name} — ${session.name}`,
+        createdBy: session,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      setSubmittedOrderId(savedId);
+    }
+
     if (status !== "draft") {
-      router.push(`/dashboard/orders?id=${id}`);
+      router.push(`/dashboard/orders?id=${savedId}`);
     }
   };
+
+  // If the user is trying to edit an order they have no rights to, show a
+  // friendly block instead of the editor.
+  if (editingOrder && !canEditExisting) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 sm:px-5 md:px-8 pt-32 pb-20 text-center">
+        <h1 className="text-3xl font-bold tracking-tight">
+          You can&rsquo;t edit this order
+        </h1>
+        <p className="mt-4 text-muted-foreground">
+          {editingOrder.status === "approved" || editingOrder.status === "ordered"
+            ? `${editingOrder.id} is ${editingOrder.status} and locked.`
+            : editingOrder.status === "pending"
+              ? `${editingOrder.id} is in approval — only the assigned approver can edit it while it's there.`
+              : `${editingOrder.id} belongs to ${editingOrder.createdBy.name}. Only they can edit their own ${editingOrder.status}.`}
+        </p>
+        <div className="mt-8 flex justify-center gap-3">
+          <Link
+            href={`/dashboard/orders?id=${editingOrder.id}`}
+            className="inline-flex h-11 items-center justify-center rounded-full bg-parkwell-blue px-6 text-sm font-semibold text-white hover:bg-parkwell-blue/90"
+          >
+            View order
+          </Link>
+          <Link
+            href="/dashboard"
+            className="inline-flex h-11 items-center justify-center rounded-full border border-border bg-background px-6 text-sm font-semibold hover:bg-muted"
+          >
+            Back to dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-5 md:px-8 pt-24 pb-20">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
         <div>
           <Link
-            href="/templates"
+            href={editingOrder ? "/dashboard/orders" : "/templates"}
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
-            Back to library
+            {editingOrder ? "Back to orders" : "Back to library"}
           </Link>
           <h1 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">
-            Create a sign
+            {editingOrder ? "Edit sign" : "Create a sign"}
           </h1>
           <p className="mt-1 text-muted-foreground">
-            Pick a template, fill the editable fields, download or submit for approval.
+            {editingOrder
+              ? "Make changes to this sign, then save."
+              : "Pick a template, fill the editable fields, download or submit for approval."}
           </p>
+          {editingOrder && (
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-parkwell-blue/30 bg-parkwell-blue/10 px-3.5 py-1 text-xs">
+              <span className="font-mono font-semibold text-parkwell-blue">
+                {editingOrder.id}
+              </span>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-muted-foreground">
+                Status: <span className="capitalize">{editingOrder.status}</span>
+              </span>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-muted-foreground">
+                Created by {editingOrder.createdBy.name}
+              </span>
+            </div>
+          )}
         </div>
         <Steps current={step} />
       </div>
@@ -214,7 +337,7 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
               previewRef={previewRef}
               template={template}
               values={values}
-              showZones={step === "content"}
+              showZones={false}
             />
           </div>
           {/* Hidden export-grade copy */}
@@ -269,11 +392,26 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
               location={location}
               onBack={() => setStep("specs")}
               onSaveDraft={() => submit("draft")}
-              onSubmit={() => submit("pending")}
+              onSubmit={() => {
+                // Status decision when saving:
+                //  • New sign → "pending" (submit for approval).
+                //  • Approver editing pending → stay pending (fix-and-approve).
+                //  • Creator editing rejected → re-submit → "pending".
+                //  • Creator editing draft → submit → "pending".
+                //  • Any other edit → keep existing status.
+                if (!editingOrder) return submit("pending");
+                if (
+                  editingOrder.status === "rejected" ||
+                  editingOrder.status === "draft"
+                )
+                  return submit("pending");
+                submit(editingOrder.status);
+              }}
               onDownloadPng={downloadPng}
               onDownloadPdf={downloadPdf}
               onDownloadSpecs={downloadSpecSheet}
               submittedOrderId={submittedOrderId}
+              editingOrder={editingOrder}
             />
           )}
         </div>
@@ -917,6 +1055,7 @@ function ReviewStep({
   onDownloadPdf,
   onDownloadSpecs,
   submittedOrderId,
+  editingOrder,
 }: {
   template: SignTemplate;
   size: SignSize;
@@ -929,6 +1068,7 @@ function ReviewStep({
   onDownloadPdf: () => void;
   onDownloadSpecs: () => void;
   submittedOrderId: string | null;
+  editingOrder: Order | null;
 }) {
   return (
     <div className="space-y-6">
@@ -997,11 +1137,40 @@ function ReviewStep({
       </Card>
 
       <Card>
-        <CardHeader title="Send for approval" subtitle="Approver gets a notification with the preview and specs." />
+        <CardHeader
+          title={editingOrder ? "Save changes" : "Send for approval"}
+          subtitle={
+            editingOrder
+              ? `Updates will be applied to ${editingOrder.id} (currently ${editingOrder.status}).`
+              : "Approver gets a notification with the preview and specs."
+          }
+        />
         {submittedOrderId ? (
           <Badge className="bg-parkwell-green/15 text-parkwell-green border-parkwell-green/30">
             Submitted as {submittedOrderId}
           </Badge>
+        ) : editingOrder ? (
+          <Button
+            onClick={onSubmit}
+            className="w-full h-12 rounded-full bg-parkwell-blue text-white hover:bg-parkwell-blue/90"
+          >
+            {editingOrder.status === "rejected" ? (
+              <>
+                <Send className="h-4 w-4 mr-1.5" />
+                Re-submit {editingOrder.id} for approval
+              </>
+            ) : editingOrder.status === "draft" ? (
+              <>
+                <Send className="h-4 w-4 mr-1.5" />
+                Submit {editingOrder.id} for approval
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-1.5" />
+                Save changes to {editingOrder.id}
+              </>
+            )}
+          </Button>
         ) : (
           <div className="grid gap-2.5 sm:grid-cols-2">
             <Button
