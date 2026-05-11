@@ -968,11 +968,13 @@ const SIGN_10: SignTemplate = {
   ]),
   materials: ["Aluminium", "Dibond"],
   editableFields: [
+    // Header bbox starts AFTER the P-mark icon (around x=0.30) so the bg-fill
+    // mask doesn't clip the icon when the user types.
     {
       id: "title",
       label: "Header title",
       type: "headline",
-      bbox: { x: 0.18, y: 0.04, w: 0.78, h: 0.13 },
+      bbox: { x: 0.30, y: 0.04, w: 0.66, h: 0.13 },
       placeholder: "LIMIT OF LIABILITY\n& FACILITY RULES",
       style: {
         color: C.white,
@@ -1051,11 +1053,13 @@ const SIGN_11: SignTemplate = {
   ]),
   materials: ["Aluminium", "Dibond"],
   editableFields: [
+    // Red header bbox starts AFTER the P-mark icon so the bg-fill mask
+    // doesn't clip the icon when the user types.
     {
       id: "header",
       label: "Red header",
       type: "headline",
-      bbox: { x: 0.18, y: 0.05, w: 0.78, h: 0.14 },
+      bbox: { x: 0.32, y: 0.05, w: 0.64, h: 0.13 },
       placeholder: "PAYMENT IS\nREQUIRED 24/7",
       style: {
         color: C.white,
@@ -1071,9 +1075,9 @@ const SIGN_11: SignTemplate = {
     },
     {
       id: "leadLine",
-      label: "Lead statement",
+      label: "Bolded lead line",
       type: "headline",
-      bbox: { x: 0.07, y: 0.25, w: 0.86, h: 0.06 },
+      bbox: { x: 0.07, y: 0.215, w: 0.86, h: 0.055 },
       placeholder: "No free parking any time.",
       style: {
         color: C.ink,
@@ -1085,20 +1089,73 @@ const SIGN_11: SignTemplate = {
       },
       constraints: { maxChars: 50, maxRows: 1 },
     },
+    // Body is split into 4 separately-editable paragraphs. Each fits into
+    // its own visible section in the PNG (blank lines between).
     {
-      id: "body",
-      label: "Body content",
+      id: "bodyPara1",
+      label: "Paragraph 1",
       type: "body",
-      bbox: { x: 0.07, y: 0.32, w: 0.86, h: 0.65 },
+      bbox: { x: 0.07, y: 0.305, w: 0.86, h: 0.095 },
       placeholder:
-        "Payment is required to avoid additional fees & penalties.\n\nThis lot is monitored 24/7 by license plate reading technology.\n\nFailure to pay for parking will result in a violation notice with corresponding fee sent to vehicle owner's address. This is in addition to the parking fee.\n\nPlease note that if payment is not made within 30 days, all fees will be referred to a registered debt collection agency.",
+        "Payment is required to avoid additional fees & penalties.",
       style: {
         color: C.ink,
         bgColor: C.white,
         fontWeight: 400,
         fontSize: 0.026,
         align: "center",
-        valign: "top",
+        valign: "center",
+        lineHeight: 1.4,
+      },
+    },
+    {
+      id: "bodyPara2",
+      label: "Paragraph 2",
+      type: "body",
+      bbox: { x: 0.07, y: 0.420, w: 0.86, h: 0.085 },
+      placeholder:
+        "This lot is monitored 24/7 by license plate reading technology.",
+      style: {
+        color: C.ink,
+        bgColor: C.white,
+        fontWeight: 400,
+        fontSize: 0.026,
+        align: "center",
+        valign: "center",
+        lineHeight: 1.4,
+      },
+    },
+    {
+      id: "bodyPara3",
+      label: "Paragraph 3",
+      type: "body",
+      bbox: { x: 0.07, y: 0.535, w: 0.86, h: 0.190 },
+      placeholder:
+        "Failure to pay for parking will result in a violation notice with corresponding fee sent to vehicle owner's address. This is in addition to the parking fee.",
+      style: {
+        color: C.ink,
+        bgColor: C.white,
+        fontWeight: 400,
+        fontSize: 0.026,
+        align: "center",
+        valign: "center",
+        lineHeight: 1.4,
+      },
+    },
+    {
+      id: "bodyPara4",
+      label: "Paragraph 4",
+      type: "body",
+      bbox: { x: 0.07, y: 0.755, w: 0.86, h: 0.210 },
+      placeholder:
+        "Please note that if payment is not made within 30 days, all fees will be referred to a registered debt collection agency.",
+      style: {
+        color: C.ink,
+        bgColor: C.white,
+        fontWeight: 400,
+        fontSize: 0.026,
+        align: "center",
+        valign: "center",
         lineHeight: 1.4,
       },
     },
@@ -1155,11 +1212,14 @@ const SIGN_12: SignTemplate = {
       },
       constraints: { maxChars: 40 },
     },
+    // Row 1 — bboxes fit INSIDE each box's content area below the section
+    // header ("HOURS OF OPERATION", "FORMS OF PAYMENT ACCEPTED") which stays
+    // baked into the PNG. Same for all later rows.
     {
       id: "hoursContent",
       label: "Hours of operation",
       type: "body",
-      bbox: { x: 0.05, y: 0.165, w: 0.45, h: 0.13 },
+      bbox: { x: 0.06, y: 0.205, w: 0.42, h: 0.085 },
       placeholder: "PUBLIC PARKING\nOPEN DAILY 24/7",
       style: {
         color: C.ink,
@@ -1167,7 +1227,7 @@ const SIGN_12: SignTemplate = {
         fontWeight: 500,
         fontSize: 0.022,
         align: "center",
-        valign: "top",
+        valign: "center",
         lineHeight: 1.4,
       },
     },
@@ -1175,7 +1235,7 @@ const SIGN_12: SignTemplate = {
       id: "paymentContent",
       label: "Forms of payment",
       type: "list",
-      bbox: { x: 0.5, y: 0.165, w: 0.45, h: 0.13 },
+      bbox: { x: 0.52, y: 0.205, w: 0.42, h: 0.085 },
       placeholder: ["CREDIT/DEBIT CARD", "NO CASH"],
       style: {
         color: C.ink,
@@ -1183,16 +1243,17 @@ const SIGN_12: SignTemplate = {
         fontWeight: 500,
         fontSize: 0.022,
         align: "left",
-        valign: "top",
+        valign: "center",
         bulletStyle: "•",
         lineHeight: 1.4,
       },
     },
+    // Row 2
     {
       id: "ratesContent",
-      label: "Parking rates (one per line)",
+      label: "Parking rates",
       type: "body",
-      bbox: { x: 0.05, y: 0.32, w: 0.45, h: 0.18 },
+      bbox: { x: 0.06, y: 0.385, w: 0.42, h: 0.10 },
       placeholder:
         "$10.00    WEEKDAY RATE\n$5.00     NIGHTS\n$5.00     WEEKENDS",
       style: {
@@ -1201,7 +1262,7 @@ const SIGN_12: SignTemplate = {
         fontWeight: 500,
         fontSize: 0.022,
         align: "left",
-        valign: "top",
+        valign: "center",
         lineHeight: 1.55,
       },
     },
@@ -1209,7 +1270,7 @@ const SIGN_12: SignTemplate = {
       id: "instructionsContent",
       label: "Payment instructions",
       type: "body",
-      bbox: { x: 0.5, y: 0.32, w: 0.45, h: 0.18 },
+      bbox: { x: 0.52, y: 0.385, w: 0.42, h: 0.10 },
       placeholder:
         "PAY BY PHONE BY SCANNING THE QR CODE LOCATED THROUGHOUT THE FACILITY. NO FREE PARKING ANYTIME. DO NOT PAY ATTENDANT. NO IN & OUT.",
       style: {
@@ -1217,41 +1278,60 @@ const SIGN_12: SignTemplate = {
         bgColor: C.white,
         fontWeight: 500,
         fontSize: 0.022,
-        align: "left",
-        valign: "top",
+        align: "center",
+        valign: "center",
         lineHeight: 1.35,
       },
     },
+    // Row 3 — liability split into its two visible sub-sections so the
+    // "CONTACT PARKWELL:" subheader stays as part of the PNG.
     {
       id: "liabilityContent",
-      label: "Limit of liability + contact",
+      label: "Limit of liability paragraph",
       type: "body",
-      bbox: { x: 0.05, y: 0.54, w: 0.45, h: 0.42 },
+      bbox: { x: 0.06, y: 0.61, w: 0.42, h: 0.175 },
       placeholder:
-        "LOCK YOUR CAR AND STORE VALUABLES OUT OF SIGHT. CHARGE IS FOR PARKING SPACES ONLY. PARKWELL AND ITS AFFILIATES NOT RESPONSIBLE FOR THEFT, FIRE, DAMAGE OR INJURY TO ANY PERSON OR PROPERTY.\n\nCONTACT PARKWELL:\n720-504-3620\n2546 15th St, DENVER CO 80211\nccnparking@goparkwell.com\nWWW.GOPARKWELL.COM",
+        "LOCK YOUR CAR AND STORE VALUABLES OUT OF SIGHT. CHARGE IS FOR PARKING SPACES ONLY. PARKWELL AND ITS AFFILIATES NOT RESPONSIBLE FOR THEFT, FIRE, DAMAGE OR INJURY TO ANY PERSON OR PROPERTY.",
       style: {
         color: C.ink,
         bgColor: C.white,
         fontWeight: 500,
         fontSize: 0.02,
-        align: "left",
+        align: "center",
         valign: "top",
         lineHeight: 1.4,
+      },
+    },
+    {
+      id: "contactContent",
+      label: "Contact Parkwell info",
+      type: "body",
+      bbox: { x: 0.06, y: 0.835, w: 0.42, h: 0.13 },
+      placeholder:
+        "720-504-3620\n2546 15th St, DENVER CO 80211\nccnparking@goparkwell.com\nWWW.GOPARKWELL.COM",
+      style: {
+        color: C.ink,
+        bgColor: C.white,
+        fontWeight: 500,
+        fontSize: 0.02,
+        align: "center",
+        valign: "top",
+        lineHeight: 1.45,
       },
     },
     {
       id: "violationsContent",
       label: "Violations content",
       type: "body",
-      bbox: { x: 0.5, y: 0.54, w: 0.45, h: 0.42 },
+      bbox: { x: 0.52, y: 0.61, w: 0.42, h: 0.355 },
       placeholder:
-        "PAID PARKING IS STRICTLY ENFORCED 24/7 NOTICES/FINES ARE ISSUED FOR NON-PAYMENT, EXCEEDING ALLOTTED TIME, OR PARKING IN UNAUTHORIZED SPACES. WE RESERVE THE RIGHT TO TOW FOR UNAUTHORIZED PARKING. FEES & ESCALATIONS: $45 IF PAID WITHIN 14 DAYS, $95 IF PAID AFTER. TO DISPUTE A VIOLATION, EMAIL NOTICES@GOPARKWELL.COM",
+        "PAID PARKING IS STRICTLY ENFORCED 24/7. NOTICES/FINES ARE ISSUED FOR NON-PAYMENT, EXCEEDING ALLOTTED TIME, OR PARKING IN UNAUTHORIZED SPACES. WE RESERVE THE RIGHT TO TOW FOR UNAUTHORIZED PARKING. FEES & ESCALATIONS: $45 IF PAID WITHIN 14 DAYS, $95 IF PAID AFTER. TO DISPUTE A VIOLATION, EMAIL NOTICES@GOPARKWELL.COM",
       style: {
         color: C.ink,
         bgColor: C.white,
         fontWeight: 500,
         fontSize: 0.02,
-        align: "left",
+        align: "center",
         valign: "top",
         lineHeight: 1.4,
       },

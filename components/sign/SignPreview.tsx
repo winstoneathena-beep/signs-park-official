@@ -217,85 +217,14 @@ function FieldOverlay({
     const list = (value as string[]).filter(
       (v) => typeof v === "string" && v.length > 0,
     );
-    const listText = list.join("\n");
-    const listFontSize = autoFit({
-      text: listText,
-      baseFontSize: fontSize,
-      boxW: px.width,
-      boxH: px.height,
-      lineHeight: style.lineHeight ?? 1.35,
-      fontWeight: style.fontWeight,
-      // bullet glyph adds a few chars of width
-      extraCharsPerLine: 2,
-    });
     return (
-      <div
-        style={{
-          position: "absolute",
-          ...px,
-          background: style.bgColor,
-          color: style.color,
-          fontFamily: "var(--font-sans)",
-          fontWeight: style.fontWeight,
-          fontSize: listFontSize,
-          lineHeight: style.lineHeight ?? 1.35,
-          textAlign: style.align ?? "left",
-          textTransform: style.transform ?? "none",
-          fontStyle: style.italic ? "italic" : "normal",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent:
-            style.valign === "top"
-              ? "flex-start"
-              : style.valign === "bottom"
-                ? "flex-end"
-                : "center",
-          padding: `${px.height * 0.04}px ${px.width * 0.03}px`,
-          gap: `${listFontSize * 0.25}px`,
-          overflow: "hidden",
-          outline,
-          zIndex: 10,
-        }}
-      >
-        {list.map((item, i) => (
-          <div
-            key={i}
-            style={{
-              display: "flex",
-              gap: `${fontSize * 0.5}px`,
-              alignItems: "baseline",
-              justifyContent:
-                style.align === "center"
-                  ? "center"
-                  : style.align === "right"
-                    ? "flex-end"
-                    : "flex-start",
-              width: "100%",
-            }}
-          >
-            <span
-              aria-hidden
-              style={{
-                flex: "0 0 auto",
-                opacity: 0.95,
-                minWidth: style.bulletStyle === "1." ? `${fontSize * 1.1}px` : "auto",
-              }}
-            >
-              {bulletMarker(style.bulletStyle, i)}
-            </span>
-            <span
-              style={{
-                flex: "1 1 0%",
-                minWidth: 0,
-                wordBreak: "break-word",
-                overflowWrap: "break-word",
-              }}
-            >
-              {item || " "}
-            </span>
-          </div>
-        ))}
-      </div>
+      <ListOverlay
+        items={list}
+        px={px}
+        baseFontSize={fontSize}
+        style={style}
+        outline={outline}
+      />
     );
   }
 
@@ -452,6 +381,114 @@ function TextOverlay({
 
 /* ------------------------------ Helpers ------------------------------ */
 
+/* ----------------------- ListOverlay (shrink-to-fit) ----------------------- */
+
+/** Same shrink-to-fit treatment as TextOverlay, but for bullet lists. */
+function ListOverlay({
+  items,
+  px,
+  baseFontSize,
+  style,
+  outline,
+}: {
+  items: string[];
+  px: { left: number; top: number; width: number; height: number };
+  baseFontSize: number;
+  style: EditableField["style"];
+  outline?: string;
+}) {
+  const innerRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    el.style.transform = "scale(1)";
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      const availW = px.width * 0.94;
+      const availH = px.height * 0.92;
+      const scale = Math.max(
+        0.4,
+        Math.min(1, availW / rect.width, availH / rect.height),
+      );
+      el.style.transform = `scale(${scale})`;
+    }
+  }, [items, baseFontSize, px.width, px.height, style.lineHeight, style.fontWeight]);
+
+  const align = style.align ?? "left";
+  const valign = style.valign ?? "center";
+  const justifyContent =
+    align === "center"
+      ? "center"
+      : align === "right"
+        ? "flex-end"
+        : "flex-start";
+  const alignItems =
+    valign === "top"
+      ? "flex-start"
+      : valign === "bottom"
+        ? "flex-end"
+        : "center";
+  const transformOrigin =
+    align === "center"
+      ? "center center"
+      : align === "right"
+        ? "right center"
+        : "left center";
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        ...px,
+        background: style.bgColor,
+        display: "flex",
+        alignItems,
+        justifyContent,
+        padding: `${px.height * 0.04}px ${px.width * 0.03}px`,
+        overflow: "hidden",
+        outline,
+        zIndex: 10,
+      }}
+    >
+      <div
+        ref={innerRef}
+        style={{
+          color: style.color,
+          fontFamily: "var(--font-sans)",
+          fontSize: baseFontSize,
+          fontWeight: style.fontWeight,
+          lineHeight: style.lineHeight ?? 1.35,
+          textAlign: align,
+          textTransform: style.transform ?? "none",
+          fontStyle: style.italic ? "italic" : "normal",
+          whiteSpace: "pre",
+          transformOrigin,
+          display: "inline-block",
+        }}
+      >
+        {items.map((item, i) => (
+          <div key={i} style={{ whiteSpace: "pre", lineHeight: "inherit" }}>
+            <span
+              aria-hidden
+              style={{
+                display: "inline-block",
+                opacity: 0.95,
+                marginRight: `${baseFontSize * 0.4}px`,
+                minWidth:
+                  style.bulletStyle === "1." ? `${baseFontSize * 1.1}px` : "auto",
+              }}
+            >
+              {bulletMarker(style.bulletStyle, i)}
+            </span>
+            <span>{item || " "}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function bulletMarker(
   style: EditableField["style"]["bulletStyle"],
   index: number,
@@ -467,52 +504,6 @@ function bulletMarker(
     default:
       return "•";
   }
-}
-
-/**
- * Estimate a font size that fits the longest line of `text` inside a box of
- * `boxW` × `boxH`. No DOM measurement — uses an empirically-tuned character
- * width ratio for Montserrat. Returns a value between 40 % and 100 % of
- * `baseFontSize`. The renderer's `wordBreak` keeps anything pathological from
- * overflowing in the rare case content still doesn't fit at the floor.
- */
-function autoFit({
-  text,
-  baseFontSize,
-  boxW,
-  boxH,
-  lineHeight,
-  fontWeight,
-  extraCharsPerLine = 0,
-}: {
-  text: string;
-  baseFontSize: number;
-  boxW: number;
-  boxH: number;
-  lineHeight: number;
-  fontWeight: number;
-  extraCharsPerLine?: number;
-}): number {
-  const lines = text.split("\n");
-  const longest = Math.max(
-    1,
-    ...lines.map((l) => l.length + extraCharsPerLine),
-  );
-  // Montserrat: bold is wider than regular. Approximate em-widths for the
-  // worst-case (uppercase-heavy) string. These values are tuned conservatively
-  // — better to slightly under-fill than to spill over the bbox.
-  const charWidthRatio = fontWeight >= 700 ? 0.62 : 0.56;
-
-  // Use ~6 % padding inset so text doesn't kiss the bbox edge.
-  const usableW = boxW * 0.94;
-  const usableH = boxH * 0.92;
-
-  const maxByWidth = usableW / (longest * charWidthRatio);
-  const maxByHeight = usableH / (lineHeight * lines.length);
-
-  const fitted = Math.min(maxByWidth, maxByHeight);
-  const floor = baseFontSize * 0.4;
-  return Math.max(floor, Math.min(baseFontSize, fitted));
 }
 
 /* ------------------------------ Rate table ------------------------------ */
