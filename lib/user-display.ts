@@ -1,16 +1,19 @@
 import type { Role } from "@/lib/orders";
 
-/** "Apr" for approver, "Rqs" for requester. */
-export function roleAbbrev(role: Role): "Apr" | "Rqs" {
-  return role === "approver" ? "Apr" : "Rqs";
+/** Full role label — used in user-facing pills and tags. */
+export function roleLabel(role: Role): "Approver" | "Requester" {
+  return role === "approver" ? "Approver" : "Requester";
 }
+
+/** Kept for backwards compatibility; same return as roleLabel now. */
+export const roleAbbrev = roleLabel;
 
 /** First word of a person's name — used as their compact username. */
 export function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] || name;
 }
 
-/** "Andre (Rqs)" — the human + role tag we use everywhere for accountability. */
+/** "Andre · Requester" — the human + role tag we use everywhere for accountability. */
 export function userTag(name: string, role: Role): string {
-  return `${firstName(name)} (${roleAbbrev(role)})`;
+  return `${firstName(name)} · ${roleLabel(role)}`;
 }

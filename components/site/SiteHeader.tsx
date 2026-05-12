@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useSyncExternalStore, useCallback } from "react";
+import { usePathname } from "next/navigation";
 import { Menu, X, Pencil, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,8 @@ export function SiteHeader() {
   const scrolled = useScrolled();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { session } = useSession();
+  const pathname = usePathname();
+  const onDashboard = pathname?.startsWith("/dashboard") ?? false;
   const RoleIcon = session.role === "approver" ? ShieldCheck : Pencil;
   const roleAccent =
     session.role === "approver" ? "text-parkwell-green" : "text-parkwell-blue";
@@ -76,12 +79,14 @@ export function SiteHeader() {
             {identity}
           </Link>
           <ThemeToggle />
-          <Button
-            asChild
-            className="hidden md:inline-flex h-10 rounded-full bg-parkwell-blue text-white hover:bg-parkwell-blue/90 shadow-lg shadow-parkwell-blue/30"
-          >
-            <Link href="/dashboard">Open Dashboard</Link>
-          </Button>
+          {!onDashboard && (
+            <Button
+              asChild
+              className="hidden md:inline-flex h-10 rounded-full bg-parkwell-blue text-white hover:bg-parkwell-blue/90 shadow-lg shadow-parkwell-blue/30"
+            >
+              <Link href="/dashboard">Open Dashboard</Link>
+            </Button>
+          )}
           <button
             type="button"
             aria-label="Toggle menu"
@@ -106,13 +111,15 @@ export function SiteHeader() {
                 {item.label}
               </Link>
             ))}
-            <Link
-              href="/dashboard"
-              onClick={() => setMobileOpen(false)}
-              className="mt-2 px-4 py-3 text-center text-base font-semibold text-white bg-parkwell-blue rounded-full"
-            >
-              Open Dashboard
-            </Link>
+            {!onDashboard && (
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileOpen(false)}
+                className="mt-2 px-4 py-3 text-center text-base font-semibold text-white bg-parkwell-blue rounded-full"
+              >
+                Open Dashboard
+              </Link>
+            )}
           </nav>
         </div>
       )}

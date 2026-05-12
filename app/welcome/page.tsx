@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
@@ -13,7 +13,7 @@ import {
   Mail,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
-import { signIn, type Role } from "@/lib/orders";
+import { signIn, useSession, type Role } from "@/lib/orders";
 import { cn } from "@/lib/utils";
 
 const ROLES: {
@@ -58,9 +58,21 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function WelcomePage() {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  // Pre-fill from the existing session so a "Switch role" flow doesn't
+  // force the user to re-type their identity. Fresh installs see empty
+  // fields because DEFAULT_SESSION is empty.
+  const { session } = useSession();
+  const [name, setName] = useState(session.name);
+  const [email, setEmail] = useState(session.email);
   const [attempted, setAttempted] = useState(false);
+
+  // useSession's first render returns DEFAULT_SESSION on the server / before
+  // localStorage is read. After hydration the session may update; if the user
+  // hasn't typed anything yet, mirror those values into the form.
+  useEffect(() => {
+    setName((prev) => (prev ? prev : session.name));
+    setEmail((prev) => (prev ? prev : session.email));
+  }, [session.name, session.email]);
 
   const trimmedName = name.trim();
   const trimmedEmail = email.trim();
@@ -93,17 +105,16 @@ export default function WelcomePage() {
 
       <div className="relative mx-auto max-w-6xl px-5 md:px-8 py-16 md:py-24">
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         >
           <Logo tone="white" className="w-32" />
         </motion.div>
 
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
           className="mt-12 max-w-3xl"
         >
           <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 backdrop-blur px-3.5 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-white/70">
@@ -124,9 +135,9 @@ export default function WelcomePage() {
 
         {/* Accountability fields */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.3, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
           className="mt-10 max-w-2xl rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur p-5 md:p-6"
         >
           <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/45 mb-4">
@@ -158,9 +169,9 @@ export default function WelcomePage() {
         </motion.div>
 
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.28, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.3, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
           className="mt-8 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/45"
         >
           Step 2 — Pick your role
@@ -175,9 +186,9 @@ export default function WelcomePage() {
                 type="button"
                 onClick={() => pick(r.id)}
                 aria-disabled={disabled}
-                initial={{ opacity: 0, y: 24 }}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.3 + i * 0.08, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ duration: 0.3, delay: 0.12 + i * 0.05, ease: [0.16, 1, 0.3, 1] }}
                 whileHover={disabled ? undefined : { y: -4 }}
                 className={cn(
                   "group relative text-left rounded-3xl p-7 md:p-9 border transition-colors",

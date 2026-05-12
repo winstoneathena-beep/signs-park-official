@@ -19,8 +19,14 @@ export type FieldType =
   | "list"
   | "rate-table"
   | "qr-image"
+  | "arrow-direction"
   | "location-name" // v1 alias — same as headline
   | "messaging"; // v1 alias — same as body
+
+export type ArrowDirection = "right" | "down" | "left" | "up";
+
+/** Single row in a rate-table field. Left column = label (bold) + sub; right column = rates list. */
+export type RateRow = { label: string; sub: string; rates: string[] };
 
 export type EditableField = {
   id: string;
@@ -30,6 +36,8 @@ export type EditableField = {
   bbox: { x: number; y: number; w: number; h: number };
   /** Default value displayed until the user edits. Strings for text/headline/body, string[] for list. */
   placeholder: string | string[];
+  /** rate-table only: starting rows shown until the user edits (overrides the global default). */
+  defaultRows?: RateRow[];
   style: {
     color: string;
     /** Background fill that masks the underlying placeholder pixels. */
@@ -124,32 +132,21 @@ const SIGN_01: SignTemplate = {
   ]),
   materials: ["Vinyl", "Coroplast", "Aluminium", "Dibond", "PVC"],
   editableFields: [
-    {
-      id: "headline",
-      label: "Top headline",
-      type: "headline",
-      // Generous bbox so bgColor fully masks the PNG "PAY HERE" text underneath
-      // when the user types a replacement.
-      bbox: { x: 0.04, y: 0.015, w: 0.92, h: 0.115 },
-      placeholder: "PAY HERE",
-      style: {
-        color: C.white,
-        bgColor: C.blue,
-        fontWeight: 800,
-        fontSize: 0.075,
-        align: "center",
-        valign: "center",
-        transform: "uppercase",
-        lineHeight: 1.0,
-      },
-      constraints: { maxChars: 12, maxRows: 1 },
-    },
+    // Sign #1 is QR-only: PAY HERE headline, SCAN TO PAY caption, and the
+    // no-app-needed message are all canonical and locked. The user only
+    // uploads a QR code; everything else is baked into the PNG.
     {
       id: "qrCode",
       label: "QR code",
       type: "qr-image",
-      // Square in pixel space (1715×1715) so a square upload fills exactly.
-      bbox: { x: 0.202, y: 0.217, w: 0.595, h: 0.397 },
+      // Square in pixel space (1595×1595 of 2880×4320). Pixel-scan found:
+      //   white card     x=0.202..0.798, y=0.211..0.580 (1715×1595)
+      //   QR pattern     x=0.226..0.774, y=0.226..0.565 (≈1577×1465)
+      // bbox = white card height (1595) squared, centered on the card so
+      // a square QR upload replaces the canonical pattern cleanly while
+      // leaving the white card edges and the "SCAN TO PAY" label below it
+      // visible (label sits at y≈0.65 inside the dark outer frame).
+      bbox: { x: 0.223, y: 0.211, w: 0.554, h: 0.369 },
       placeholder: "",
       style: {
         color: C.ink,
@@ -158,56 +155,17 @@ const SIGN_01: SignTemplate = {
         fontSize: 0.02,
       },
     },
-    {
-      id: "qrCaption",
-      label: "QR caption",
-      type: "headline",
-      // PNG "SCAN TO PAY" caption inside the dark container sits at
-      // y=0.613-0.644 (measured via pixel scan). Tight band over that text.
-      bbox: { x: 0.13, y: 0.600, w: 0.74, h: 0.06 },
-      placeholder: "SCAN TO PAY",
-      style: {
-        color: C.white,
-        bgColor: C.ink,
-        fontWeight: 700,
-        fontSize: 0.04,
-        align: "center",
-        valign: "center",
-        transform: "uppercase",
-      },
-      constraints: { maxChars: 16, maxRows: 1 },
-    },
-    {
-      id: "body",
-      label: "Bottom messaging",
-      type: "body",
-      // PNG canonical body text has been cleaned from the asset. Bbox places
-      // user's text in the same spot where the canonical 3-line caption sat.
-      bbox: { x: 0.04, y: 0.695, w: 0.92, h: 0.14 },
-      placeholder:
-        "No need to download an app.\nEnter license plate, payment info, and be on your way.",
-      style: {
-        color: C.white,
-        bgColor: C.blue,
-        fontWeight: 500,
-        fontSize: 0.025,
-        align: "center",
-        valign: "top",
-        lineHeight: 1.35,
-      },
-      constraints: { maxRows: 4 },
-    },
   ],
 };
 
 /* ------------------------------------------------------------------------- */
-/* Sign #2 — Scan to Pay High Validation                                     */
+/* Sign #2 — Scan to Pay Validation                                          */
 /* ------------------------------------------------------------------------- */
 
 const SIGN_02: SignTemplate = {
   id: "scan-to-pay-validation",
   number: "02",
-  name: "Scan to Pay — High Validation",
+  name: "Scan to Pay — Validation",
   description:
     "For environments with frequent validated parkers (hotels, office tenants). Numbered steps + validation footnote.",
   category: "scan-to-pay",
@@ -218,94 +176,22 @@ const SIGN_02: SignTemplate = {
   ]),
   materials: ["Vinyl", "Coroplast", "Aluminium", "Dibond", "PVC"],
   editableFields: [
-    {
-      id: "headline",
-      label: "Headline",
-      type: "headline",
-      // PNG "PAY HERE" takes the full upper band; cover generously.
-      bbox: { x: 0.04, y: 0.03, w: 0.92, h: 0.26 },
-      placeholder: "PAY HERE",
-      style: {
-        color: C.white,
-        bgColor: C.blue,
-        fontWeight: 800,
-        fontSize: 0.18,
-        align: "center",
-        valign: "center",
-        transform: "uppercase",
-      },
-      constraints: { maxChars: 14, maxRows: 1 },
-    },
+    // Sign #2 is QR-only: PAY HERE headline, SCAN TO PAY caption, numbered
+    // steps, and validation footnote are all canonical and locked. The user
+    // only uploads a QR code; everything else is baked into the PNG.
     {
       id: "qrCode",
       label: "QR code",
       type: "qr-image",
-      // Square in pixel space (~738×738) so square QR upload fits.
-      bbox: { x: 0.078, y: 0.330, w: 0.205, h: 0.308 },
+      // Square-in-pixel-space (738×738 of 3600×2400). Pixel-scan found:
+      //   white card     x=0.059..0.330, y=0.323..0.624
+      //   QR pattern     x=0.068..0.262, y=0.335..0.612 (≈698×664)
+      // The bbox covers the QR pattern with a tight margin so a square QR
+      // upload (white-bg, black squares) replaces canonical pixels cleanly
+      // while leaving the white card frame and "SCAN TO PAY" label visible.
+      bbox: { x: 0.0625, y: 0.3275, w: 0.205, h: 0.3075 },
       placeholder: "",
       style: { color: C.ink, bgColor: C.white, fontWeight: 400, fontSize: 0.02 },
-    },
-    {
-      id: "qrCaption",
-      label: "QR caption",
-      type: "headline",
-      // Inside the rounded dark container. PNG "SCAN TO PAY" caption sits at
-      // y=0.65-0.68 (measured via pixel scan). Cover that band tightly.
-      bbox: { x: 0.06, y: 0.635, w: 0.245, h: 0.06 },
-      placeholder: "SCAN TO PAY",
-      style: {
-        color: C.white,
-        bgColor: C.ink,
-        fontWeight: 700,
-        fontSize: 0.06,
-        align: "center",
-        valign: "center",
-        transform: "uppercase",
-      },
-      constraints: { maxChars: 16 },
-    },
-    {
-      id: "steps",
-      label: "Numbered steps",
-      type: "list",
-      // Cover the full numbered-step block (incl. PNG digits column).
-      bbox: { x: 0.34, y: 0.30, w: 0.62, h: 0.54 },
-      placeholder: [
-        "Park and then scan the QR code",
-        "Enter your information and start session",
-        "Enter validation code (if provided during visit*)",
-        "Drive out when you’re done with your visit",
-      ],
-      style: {
-        color: C.white,
-        bgColor: C.blue,
-        fontWeight: 500,
-        fontSize: 0.05,
-        align: "left",
-        valign: "center",
-        lineHeight: 1.3,
-        bulletStyle: "1.",
-      },
-      constraints: { maxItems: 6 },
-    },
-    {
-      id: "footnote",
-      label: "Footnote",
-      type: "body",
-      // PNG footnote text has been cleaned from the asset; this bbox places
-      // the user's text in the same spot where the canonical sat (~y=0.74).
-      bbox: { x: 0.34, y: 0.735, w: 0.62, h: 0.075 },
-      placeholder: "*60-minute validated parking for tenant visitors",
-      style: {
-        color: C.white,
-        bgColor: C.blue,
-        fontWeight: 500,
-        fontSize: 0.04,
-        align: "center",
-        valign: "center",
-        italic: true,
-      },
-      constraints: { maxChars: 90, maxRows: 1 },
     },
   ],
 };
@@ -319,7 +205,7 @@ const SIGN_03: SignTemplate = {
   number: "03",
   name: "Standard Rate Sign",
   description:
-    "Primary entrance rate sign. Welcome to {LOCATION NAME}, full rate breakdown, additional messaging.",
+    "Primary entrance rate sign. Welcome banner, full rate breakdown, and additional messaging.",
   category: "rate-sign",
   sourceImage: "/sign-templates/03-standard-rate.png",
   aspectRatio: 3360 / 5280,
@@ -417,7 +303,7 @@ const SIGN_04: SignTemplate = {
   number: "04",
   name: "Valet Podium Rate Sign",
   description:
-    "Customizable for the property name (Ink header) plus tiered rates and a validated rate panel.",
+    "Property name in the dark header, tiered rates below, and a validated-rate panel.",
   category: "rate-sign",
   sourceImage: "/sign-templates/04-valet-podium-rate.png",
   aspectRatio: 2880 / 3840,
@@ -482,12 +368,19 @@ const SIGN_04: SignTemplate = {
     },
     {
       id: "valetRates",
-      label: "Valet rates (one per line: PRICE   DURATION)",
-      type: "body",
-      // 4 rate lines stacked — give the full middle band.
+      label: "Valet rates",
+      // Structured 2-column grid — same renderer as Sign #3's rate table so
+      // user-typed prices and durations stay aligned to the canonical layout.
+      // label = price (left col, bold), rates[0] = duration (right col).
+      type: "rate-table",
       bbox: { x: 0.05, y: 0.305, w: 0.9, h: 0.235 },
-      placeholder:
-        "$20    0-4 hour\n$32    4-8 hours\n$53    8+ hours\n$53    Overnight",
+      placeholder: "",
+      defaultRows: [
+        { label: "$20", sub: "", rates: ["0-4 hour"] },
+        { label: "$32", sub: "", rates: ["4-8 hours"] },
+        { label: "$53", sub: "", rates: ["8+ hours"] },
+        { label: "$53", sub: "", rates: ["Overnight"] },
+      ],
       style: {
         color: C.white,
         bgColor: C.blue,
@@ -495,15 +388,23 @@ const SIGN_04: SignTemplate = {
         fontSize: 0.038,
         align: "left",
         valign: "center",
-        lineHeight: 1.35,
+        lineHeight: 1.2,
+        // Narrow price column on the left.
+        columnSplit: 0.22,
       },
       constraints: { maxRows: 6 },
     },
+    // The validated section is enclosed in a white-stroke frame in the canonical
+    // PNG (top y≈0.542, bottom y≈0.777, left x≈0.069, right x≈0.93). Every
+    // field below sits STRICTLY INSIDE that frame so the bg-fill never paints
+    // over the white frame outline. Price + duration and the two locations
+    // are split into separate left/right fields so they can be edited cell-by-
+    // cell, matching the canonical 2-column layout.
     {
       id: "validatedTitle",
       label: "Validated header",
       type: "headline",
-      bbox: { x: 0.06, y: 0.545, w: 0.88, h: 0.075 },
+      bbox: { x: 0.10, y: 0.560, w: 0.80, h: 0.055 },
       placeholder: "VALIDATED RATE",
       style: {
         color: C.white,
@@ -517,38 +418,68 @@ const SIGN_04: SignTemplate = {
       constraints: { maxChars: 22 },
     },
     {
-      id: "validatedRate",
-      label: "Validated rate price",
+      id: "validatedRatePrice",
+      label: "Validated price",
       type: "text",
-      bbox: { x: 0.06, y: 0.625, w: 0.88, h: 0.075 },
-      placeholder: "$12   0-4 hours",
+      bbox: { x: 0.10, y: 0.620, w: 0.36, h: 0.055 },
+      placeholder: "$12",
       style: {
         color: C.white,
         bgColor: C.blue,
         fontWeight: 700,
-        fontSize: 0.034,
-        align: "center",
+        fontSize: 0.036,
+        align: "left",
         valign: "center",
       },
-      constraints: { maxChars: 30 },
+      constraints: { maxChars: 8 },
     },
     {
-      id: "validatedLocations",
-      label: "Validated locations",
-      type: "list",
-      // Wider bbox so the first letter (e.g. "T" in Tavernetta) isn't clipped.
-      bbox: { x: 0.05, y: 0.705, w: 0.9, h: 0.08 },
-      placeholder: ["Tavernetta", "Sunday Vinyl"],
+      id: "validatedRateDuration",
+      label: "Validated duration",
+      type: "text",
+      bbox: { x: 0.50, y: 0.620, w: 0.40, h: 0.055 },
+      placeholder: "0-4 hours",
       style: {
         color: C.white,
         bgColor: C.blue,
         fontWeight: 400,
-        fontSize: 0.026,
-        align: "center",
+        fontSize: 0.030,
+        align: "left",
         valign: "center",
-        bulletStyle: "•",
       },
-      constraints: { maxItems: 4 },
+      constraints: { maxChars: 18 },
+    },
+    {
+      id: "validatedLocationLeft",
+      label: "Validated location (left)",
+      type: "text",
+      bbox: { x: 0.10, y: 0.685, w: 0.40, h: 0.060 },
+      placeholder: "• Tavernetta",
+      style: {
+        color: C.white,
+        bgColor: C.blue,
+        fontWeight: 400,
+        fontSize: 0.028,
+        align: "left",
+        valign: "center",
+      },
+      constraints: { maxChars: 24 },
+    },
+    {
+      id: "validatedLocationRight",
+      label: "Validated location (right)",
+      type: "text",
+      bbox: { x: 0.50, y: 0.685, w: 0.40, h: 0.060 },
+      placeholder: "• Sunday Vinyl",
+      style: {
+        color: C.white,
+        bgColor: C.blue,
+        fontWeight: 400,
+        fontSize: 0.028,
+        align: "left",
+        valign: "center",
+      },
+      constraints: { maxChars: 24 },
     },
   ],
 };
@@ -574,7 +505,12 @@ const SIGN_05: SignTemplate = {
       label: "Headline (right of P-mark)",
       type: "headline",
       // PNG "PUBLIC PARKING" — cover the full 2-line block height.
-      bbox: { x: 0.34, y: 0.08, w: 0.64, h: 0.38 },
+      // Left edge starts after the P-mark right edge (canonical x≈0.35) so
+      // the bg-fill never paints over the logo.
+      // valign="top" pins the headline's top edge to the bbox top so user-typed
+      // content (1 line or 2 lines) always starts at the same Y position as
+      // canonical "PUBLIC" — short replacements don't shift up.
+      bbox: { x: 0.37, y: 0.16, w: 0.6, h: 0.30 },
       placeholder: "PUBLIC\nPARKING",
       style: {
         color: C.white,
@@ -582,47 +518,84 @@ const SIGN_05: SignTemplate = {
         fontWeight: 800,
         fontSize: 0.13,
         align: "left",
-        valign: "center",
+        valign: "top",
         transform: "uppercase",
         lineHeight: 1.0,
       },
       constraints: { maxChars: 18, maxRows: 2 },
     },
-    // Rate strip cells — bboxes cover each half of the Ink rate strip so
-    // bg-fill decisively masks the PNG placeholder text.
+    // Rate strip — canonical Ink strip has thin top + bottom horizontal lines
+    // bracketing the content (no vertical divider). Bboxes sit STRICTLY
+    // INSIDE those lines (y: 0.84..0.95) so the open-frame stays intact when
+    // user values overlay. Price cells right-aligned, duration cells use
+    // body type so long text wraps to 2 lines like canonical.
     {
-      id: "rateLeft",
-      label: "Left rate cell",
+      id: "rateLeftPrice",
+      label: "Left rate — price",
       type: "text",
-      bbox: { x: 0.0, y: 0.795, w: 0.50, h: 0.205 },
-      placeholder: "$10 Per Day",
+      bbox: { x: 0.03, y: 0.84, w: 0.22, h: 0.11 },
+      placeholder: "$10",
       style: {
         color: C.white,
         bgColor: C.ink,
-        fontWeight: 700,
-        fontSize: 0.055,
-        align: "center",
+        fontWeight: 800,
+        fontSize: 0.08,
+        align: "right",
         valign: "center",
-        lineHeight: 1.1,
+        lineHeight: 1.0,
       },
-      constraints: { maxChars: 18 },
+      constraints: { maxChars: 6 },
     },
     {
-      id: "rateRight",
-      label: "Right rate cell",
-      type: "text",
-      bbox: { x: 0.50, y: 0.795, w: 0.50, h: 0.205 },
-      placeholder: "$5 Nights & Weekends",
+      id: "rateLeftDuration",
+      label: "Left rate — duration",
+      type: "body",
+      bbox: { x: 0.25, y: 0.84, w: 0.24, h: 0.11 },
+      placeholder: "Per Day",
       style: {
         color: C.white,
         bgColor: C.ink,
-        fontWeight: 700,
-        fontSize: 0.045,
-        align: "center",
+        fontWeight: 500,
+        fontSize: 0.036,
+        align: "left",
         valign: "center",
         lineHeight: 1.1,
       },
-      constraints: { maxChars: 22 },
+      constraints: { maxChars: 20, maxRows: 2 },
+    },
+    {
+      id: "rateRightPrice",
+      label: "Right rate — price",
+      type: "text",
+      bbox: { x: 0.50, y: 0.84, w: 0.22, h: 0.11 },
+      placeholder: "$5",
+      style: {
+        color: C.white,
+        bgColor: C.ink,
+        fontWeight: 800,
+        fontSize: 0.08,
+        align: "right",
+        valign: "center",
+        lineHeight: 1.0,
+      },
+      constraints: { maxChars: 6 },
+    },
+    {
+      id: "rateRightDuration",
+      label: "Right rate — duration",
+      type: "body",
+      bbox: { x: 0.72, y: 0.84, w: 0.25, h: 0.11 },
+      placeholder: "Nights & Weekends",
+      style: {
+        color: C.white,
+        bgColor: C.ink,
+        fontWeight: 500,
+        fontSize: 0.036,
+        align: "left",
+        valign: "center",
+        lineHeight: 1.1,
+      },
+      constraints: { maxChars: 24, maxRows: 2 },
     },
   ],
 };
@@ -648,7 +621,10 @@ const SIGN_05B: SignTemplate = {
       label: "Headline (right of P-mark)",
       type: "headline",
       // PNG "PUBLIC PARKING" (cropped from #5, shifted down on the 5b canvas).
-      bbox: { x: 0.34, y: 0.29, w: 0.64, h: 0.38 },
+      // Bbox left edge starts AFTER the P-mark right edge (measured x=0.350)
+      // and valign="top" pins typed content to the same line as canonical
+      // "PUBLIC" so short replacements don't drift up.
+      bbox: { x: 0.37, y: 0.39, w: 0.6, h: 0.25 },
       placeholder: "PUBLIC\nPARKING",
       style: {
         color: C.white,
@@ -656,7 +632,7 @@ const SIGN_05B: SignTemplate = {
         fontWeight: 800,
         fontSize: 0.13,
         align: "left",
-        valign: "center",
+        valign: "top",
         transform: "uppercase",
         lineHeight: 1.0,
       },
@@ -689,8 +665,12 @@ const SIGN_06: SignTemplate = {
       id: "headline",
       label: "Headline",
       type: "headline",
-      // PNG "EVENT PARKING" stacked next to the P-mark; cover the full 2-line block.
-      bbox: { x: 0.30, y: 0.035, w: 0.66, h: 0.215 },
+      // PNG "EVENT PARKING" sits next to the P-mark (right edge x=0.337).
+      // Canonical 2-line block: "EVENT" cap-line y=0.106, "PARKING" baseline
+      // y=0.237. Bbox covers that full vertical extent and `valign:"center"`
+      // anchors typed content to the same visual center — single-line or
+      // double-line replacements both sit in the same band as canonical.
+      bbox: { x: 0.36, y: 0.10, w: 0.60, h: 0.14 },
       placeholder: "EVENT\nPARKING",
       style: {
         color: C.white,
@@ -726,8 +706,11 @@ const SIGN_06: SignTemplate = {
       id: "additional",
       label: "Additional messaging",
       type: "body",
-      // PNG "Additional Messaging" block (2 lines).
-      bbox: { x: 0.05, y: 0.65, w: 0.9, h: 0.15 },
+      // PNG "Additional / Messaging" block — 2 canonical lines, cap-line
+      // y=0.663, baseline y=0.741. Bbox padded by 0.01 above and 0.015
+      // below to fully mask the canonical caps + the "g" descenders so the
+      // placeholder never peeks through behind typed content.
+      bbox: { x: 0.05, y: 0.653, w: 0.9, h: 0.103 },
       placeholder: "Additional Messaging",
       style: {
         color: C.white,
@@ -781,12 +764,28 @@ const SIGN_07: SignTemplate = {
       constraints: { maxChars: 28, maxRows: 2 },
     },
     {
+      id: "arrowDirection",
+      label: "Arrow direction",
+      type: "arrow-direction",
+      // Square-in-pixel-space bbox covering the canonical chevron region
+      // (canonical: x≈0.344..0.661, y≈0.512..0.702 — ~1064×1003px).
+      // Slightly oversized so rotations to up/down don't reveal canonical edges.
+      bbox: { x: 0.30, y: 0.485, w: 0.40, h: 0.255 },
+      placeholder: "right",
+      style: {
+        color: C.white,
+        bgColor: C.blue,
+        fontWeight: 700,
+        fontSize: 0,
+      },
+    },
+    {
       id: "directionLabel",
       label: "Direction label",
       type: "headline",
-      // PNG "PUBLIC PARKING" — extend down to cover the descender of "G" in
-      // PARKING but stop short of the chevron below so the chevron stays clean.
-      bbox: { x: 0.04, y: 0.25, w: 0.92, h: 0.27 },
+      // PNG "PUBLIC PARKING" — top edge raised to fully cover the cap-line of
+      // "PUBLIC" so the canonical letters don't peek above the overlay.
+      bbox: { x: 0.04, y: 0.215, w: 0.92, h: 0.305 },
       placeholder: "PUBLIC\nPARKING",
       style: {
         color: C.white,
@@ -821,6 +820,21 @@ const SIGN_08: SignTemplate = {
   ]),
   materials: ["Aluminium"],
   editableFields: [
+    {
+      id: "arrowDirection",
+      label: "Arrow direction",
+      type: "arrow-direction",
+      // Canonical chevron at top of sign: x≈0.31..0.73, y≈0.03..0.17.
+      // Square-in-pixel-space bbox (480×510px) for clean rotation.
+      bbox: { x: 0.25, y: 0.02, w: 0.5, h: 0.17 },
+      placeholder: "right",
+      style: {
+        color: C.white,
+        bgColor: C.ink,
+        fontWeight: 700,
+        fontSize: 0,
+      },
+    },
     {
       id: "directionWord",
       label: "Vertical direction word",
@@ -887,9 +901,9 @@ const SIGN_09A: SignTemplate = {
       id: "violatorNotice",
       label: "Violator notice",
       type: "body",
-      // Bbox bottom kept clear of the wave footer (which starts ~y=0.76)
-      // so the bg-fill doesn't clip the wave's curved top edge.
-      bbox: { x: 0.04, y: 0.60, w: 0.92, h: 0.135 },
+      // Top edge raised to fully cover the canonical "Violators will be cited"
+      // first-line cap-height; bottom stays clear of the wave footer.
+      bbox: { x: 0.04, y: 0.565, w: 0.92, h: 0.17 },
       placeholder:
         "Violators will be cited and/or towed at vehicle owner's expense",
       style: {
@@ -997,7 +1011,7 @@ const SIGN_10: SignTemplate = {
   number: "10",
   name: "Limit of Liability & Facility Rules",
   description:
-    "Required notice. Ink header with the P-mark, full liability copy and facility rules below.",
+    "Required legal notice. Dark header with the P-mark, full liability copy and facility rules below.",
   category: "informational",
   sourceImage: "/sign-templates/10-limit-of-liability.png",
   aspectRatio: 2160 / 2880,

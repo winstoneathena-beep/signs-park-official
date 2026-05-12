@@ -11,8 +11,13 @@ import {
   Send,
   Save,
   ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Upload,
   X,
+  Loader2,
+  Compass,
   List as ListIcon,
 } from "lucide-react";
 import { toPng } from "html-to-image";
@@ -25,6 +30,7 @@ import {
   type SignTemplate,
   type EditableField,
   type SignSize,
+  type ArrowDirection,
 } from "@/lib/sign-templates";
 import {
   SignPreview,
@@ -115,6 +121,19 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
   const [step, setStep] = useState<Step>("content");
   const [submittedOrderId, setSubmittedOrderId] = useState<string | null>(null);
 
+  /**
+   * Step-change ergonomics: after Continue / Back, scroll the window to the
+   * top so the user sees the new step's first field. Without this they
+   * stay anchored to wherever the button was — usually the bottom of the
+   * previous step.
+   */
+  const goToStep = (s: Step) => {
+    setStep(s);
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  };
+
   /** Switch template + reset dependent state in one user-driven action. */
   const switchTemplate = (id: string) => {
     const next = TEMPLATES_BY_ID[id] ?? SIGN_TEMPLATES[2];
@@ -130,32 +149,50 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
   const previewRef = useRef<HTMLDivElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
+  // Track in-flight downloads so the buttons can show spinners. PDF rasterizes
+  // at pixelRatio 3 (intentional for print fidelity) and takes ~8s — without
+  // a spinner the user has no feedback and may click another export, cancelling.
+  const [pngPending, setPngPending] = useState(false);
+  const [pdfPending, setPdfPending] = useState(false);
+
   const downloadPng = async () => {
+    if (pngPending || pdfPending) return;
     const node = exportRef.current;
     if (!node) return;
-    const dataUrl = await toPng(node, {
-      pixelRatio: 2,
-      cacheBust: true,
-      backgroundColor: "#ffffff",
-    });
-    triggerDownload(dataUrl, `${template.id}-${slug(location || "sign")}.png`);
+    setPngPending(true);
+    try {
+      const dataUrl = await toPng(node, {
+        pixelRatio: 2,
+        cacheBust: true,
+        backgroundColor: "#ffffff",
+      });
+      triggerDownload(dataUrl, `${template.id}-${slug(location || "sign")}.png`);
+    } finally {
+      setPngPending(false);
+    }
   };
 
   const downloadPdf = async () => {
+    if (pngPending || pdfPending) return;
     const node = exportRef.current;
     if (!node) return;
-    const dataUrl = await toPng(node, {
-      pixelRatio: 3,
-      cacheBust: true,
-      backgroundColor: "#ffffff",
-    });
-    const pdf = new jsPDF({
-      orientation: size.widthIn > size.heightIn ? "landscape" : "portrait",
-      unit: "in",
-      format: [size.widthIn, size.heightIn],
-    });
-    pdf.addImage(dataUrl, "PNG", 0, 0, size.widthIn, size.heightIn);
-    pdf.save(`${template.id}-${slug(location || "sign")}.pdf`);
+    setPdfPending(true);
+    try {
+      const dataUrl = await toPng(node, {
+        pixelRatio: 3,
+        cacheBust: true,
+        backgroundColor: "#ffffff",
+      });
+      const pdf = new jsPDF({
+        orientation: size.widthIn > size.heightIn ? "landscape" : "portrait",
+        unit: "in",
+        format: [size.widthIn, size.heightIn],
+      });
+      pdf.addImage(dataUrl, "PNG", 0, 0, size.widthIn, size.heightIn);
+      pdf.save(`${template.id}-${slug(location || "sign")}.pdf`);
+    } finally {
+      setPdfPending(false);
+    }
   };
 
   const downloadSpecSheet = () => {
@@ -237,7 +274,9 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
         updatedAt: Date.now(),
       });
     } else {
-      // Create new.
+      // Create new. Store an empty string when no location was provided —
+      // the display layer renders "—" for empty so a missing Location isn't
+      // smashed into a synthetic "template — manager" label.
       savedId = submittedOrderId || nextOrderId();
       saveOrder({
         id: savedId,
@@ -245,7 +284,7 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
         status,
         values,
         specs: commonSpecs,
-        location: location || `${template.name} — ${session.name}`,
+        location: location.trim(),
         createdBy: session,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -368,7 +407,7 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
               values={values}
               onValues={setValues}
               onTemplate={switchTemplate}
-              onNext={() => setStep("specs")}
+              onNext={() => goToStep("specs")}
             />
           )}
           {step === "specs" && (
@@ -380,8 +419,8 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
               onSize={setSize}
               onSpecs={setSpecs}
               onLocation={setLocation}
-              onBack={() => setStep("content")}
-              onNext={() => setStep("review")}
+              onBack={() => goToStep("content")}
+              onNext={() => goToStep("review")}
             />
           )}
           {step === "review" && (
@@ -390,7 +429,7 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
               size={size}
               specs={specs}
               location={location}
-              onBack={() => setStep("specs")}
+              onBack={() => goToStep("specs")}
               onSaveDraft={() => submit("draft")}
               onSubmit={() => {
                 // Status decision when saving:
@@ -410,6 +449,8 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
               onDownloadPng={downloadPng}
               onDownloadPdf={downloadPdf}
               onDownloadSpecs={downloadSpecSheet}
+              pngPending={pngPending}
+              pdfPending={pdfPending}
               submittedOrderId={submittedOrderId}
               editingOrder={editingOrder}
             />
@@ -544,11 +585,25 @@ function FieldEditor({
   value: string | string[] | RateRow[] | undefined;
   onChange: (v: string | string[] | RateRow[]) => void;
 }) {
+  if (field.type === "arrow-direction") {
+    const current: ArrowDirection =
+      value === "right" || value === "left" || value === "up" || value === "down"
+        ? value
+        : (field.placeholder as ArrowDirection) ?? "right";
+    return (
+      <ArrowDirectionEditor
+        label={field.label}
+        value={current}
+        onChange={(v) => onChange(v)}
+      />
+    );
+  }
+
   if (field.type === "rate-table") {
     const rows: RateRow[] =
       Array.isArray(value) && value.length > 0 && typeof value[0] === "object"
         ? (value as RateRow[])
-        : DEFAULT_RATE_ROWS;
+        : field.defaultRows ?? DEFAULT_RATE_ROWS;
     return <RateTableEditor label={field.label} rows={rows} onChange={onChange} />;
   }
 
@@ -609,6 +664,62 @@ function FieldEditor({
   );
 }
 
+function ArrowDirectionEditor({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: ArrowDirection;
+  onChange: (v: ArrowDirection) => void;
+}) {
+  // Order matches the visual compass — up, right, down, left.
+  const OPTIONS: { dir: ArrowDirection; Icon: React.ElementType; label: string }[] = [
+    { dir: "up", Icon: ChevronUp, label: "Up" },
+    { dir: "right", Icon: ChevronRight, label: "Right" },
+    { dir: "down", Icon: ChevronDown, label: "Down" },
+    { dir: "left", Icon: ChevronLeft, label: "Left" },
+  ];
+  return (
+    <div>
+      <Label className="mb-2 flex items-center gap-1.5">
+        <Compass className="h-3.5 w-3.5" />
+        {label}
+      </Label>
+      <div
+        role="radiogroup"
+        aria-label={label}
+        className="inline-flex rounded-full border border-input bg-background p-1 gap-1"
+      >
+        {OPTIONS.map(({ dir, Icon, label: optLabel }) => {
+          const active = dir === value;
+          return (
+            <button
+              key={dir}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              aria-label={optLabel}
+              onClick={() => onChange(dir)}
+              className={cn(
+                "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+                active
+                  ? "bg-parkwell-blue text-white shadow-md shadow-parkwell-blue/30"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              <Icon className="h-5 w-5" />
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        The brand chevron stays the same — only its direction changes.
+      </p>
+    </div>
+  );
+}
+
 function FieldLabel({
   label,
   constraints,
@@ -618,12 +729,23 @@ function FieldLabel({
   constraints?: EditableField["constraints"];
   value: string;
 }) {
+  const maxChars = constraints?.maxChars;
+  const isOver = maxChars != null && value.length > maxChars;
   return (
     <div className="flex items-baseline justify-between mb-1.5">
       <Label>{label}</Label>
-      {constraints?.maxChars && (
-        <span className="text-[11px] text-muted-foreground tabular-nums">
-          {value.length}/{constraints.maxChars}
+      {maxChars != null && (
+        <span
+          className={cn(
+            "text-[11px] tabular-nums",
+            isOver
+              ? "text-parkwell-red font-semibold"
+              : "text-muted-foreground",
+          )}
+          aria-live={isOver ? "polite" : undefined}
+        >
+          {value.length}/{maxChars}
+          {isOver ? " · too long" : ""}
         </span>
       )}
     </div>
@@ -1054,6 +1176,8 @@ function ReviewStep({
   onDownloadPng,
   onDownloadPdf,
   onDownloadSpecs,
+  pngPending,
+  pdfPending,
   submittedOrderId,
   editingOrder,
 }: {
@@ -1067,6 +1191,8 @@ function ReviewStep({
   onDownloadPng: () => void;
   onDownloadPdf: () => void;
   onDownloadSpecs: () => void;
+  pngPending: boolean;
+  pdfPending: boolean;
   submittedOrderId: string | null;
   editingOrder: Order | null;
 }) {
@@ -1111,22 +1237,33 @@ function ReviewStep({
         <div className="grid gap-2.5 sm:grid-cols-3">
           <Button
             onClick={onDownloadPng}
+            disabled={pngPending || pdfPending}
             variant="outline"
             className="h-12 rounded-full border-2"
           >
-            <Download className="h-4 w-4 mr-1.5" />
-            PNG
+            {pngPending ? (
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-1.5" />
+            )}
+            {pngPending ? "Rendering…" : "PNG"}
           </Button>
           <Button
             onClick={onDownloadPdf}
+            disabled={pngPending || pdfPending}
             variant="outline"
             className="h-12 rounded-full border-2"
           >
-            <Download className="h-4 w-4 mr-1.5" />
-            Print PDF
+            {pdfPending ? (
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-1.5" />
+            )}
+            {pdfPending ? "Generating PDF…" : "Print PDF"}
           </Button>
           <Button
             onClick={onDownloadSpecs}
+            disabled={pngPending || pdfPending}
             variant="outline"
             className="h-12 rounded-full border-2"
           >
@@ -1273,11 +1410,18 @@ function Steps({ current }: { current: Step }) {
 function initFieldValues(template: SignTemplate): FieldValues {
   const v: FieldValues = {};
   for (const f of template.editableFields) {
-    if (f.type === "rate-table") v[f.id] = DEFAULT_RATE_ROWS;
+    if (f.type === "rate-table")
+      // Prefer the field's own defaultRows so each template can ship its own
+      // canonical starting grid (Sign #3 weekday/weeknight, Sign #4 prices).
+      v[f.id] = f.defaultRows ?? DEFAULT_RATE_ROWS;
     else if (f.type === "list")
       v[f.id] = Array.isArray(f.placeholder)
         ? [...(f.placeholder as string[])]
         : [];
+    else if (f.type === "arrow-direction")
+      // Arrow direction has no "empty" state — default to the canonical
+      // PNG direction so the chevron always renders.
+      v[f.id] = typeof f.placeholder === "string" ? f.placeholder : "right";
     else v[f.id] = "";
   }
   return v;

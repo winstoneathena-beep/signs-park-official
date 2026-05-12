@@ -5,18 +5,9 @@ import Image from "next/image";
 import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import { LinkedInIcon } from "@/components/icons/LinkedInIcon";
-import { useEffect, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
 
-const ROTATING = ["on-brand", "on-spec", "on-time", "consistent", "audit-ready"];
-
 export function Hero() {
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setI((v) => (v + 1) % ROTATING.length), 2200);
-    return () => clearInterval(t);
-  }, []);
-
   return (
     <section className="relative overflow-hidden bg-ink text-white pt-28 md:pt-36 pb-24 md:pb-40">
       {/* Subtle grid + Parkwell-blue ambient glows */}
@@ -46,23 +37,7 @@ export function Hero() {
 
         <h1 className="mt-8 text-balance text-[clamp(2.5rem,7vw,5.5rem)] font-bold leading-[1.02] tracking-tight">
           Every Parkwell sign,<br className="hidden md:inline" />{" "}
-          <span className="relative inline-flex h-[1.1em] overflow-hidden align-middle min-w-[8ch]">
-            <span className="invisible">{ROTATING[0]}.</span>
-            {ROTATING.map((word, idx) => (
-              <motion.span
-                key={word}
-                className="absolute left-0 right-0 text-parkwell-blue"
-                initial={false}
-                animate={{
-                  y: idx === i ? 0 : idx < i ? "-110%" : "110%",
-                  opacity: idx === i ? 1 : 0,
-                }}
-                transition={{ type: "spring", stiffness: 80, damping: 16 }}
-              >
-                {word}.
-              </motion.span>
-            ))}
-          </span>
+          <span className="text-parkwell-blue">on-brand.</span>
         </h1>
 
         <p className="mt-6 max-w-2xl text-pretty text-base sm:text-lg leading-relaxed text-white/70">

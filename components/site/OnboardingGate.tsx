@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useOnboarded } from "@/lib/orders";
 
@@ -12,12 +12,20 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   const isPublic = PUBLIC_PATHS.has(pathname);
-  const blocked = !onboarded && !isPublic;
+
+  // Defer redirect decisions until after first client commit. Otherwise the
+  // SSR snapshot (always `false`) races with the localStorage read and can
+  // bounce already-onboarded users to /welcome during hydration.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setReady(true);
+  }, []);
+
+  const blocked = ready && !onboarded && !isPublic;
 
   useEffect(() => {
     if (!blocked) return;
-    const handle = requestAnimationFrame(() => router.replace("/welcome"));
-    return () => cancelAnimationFrame(handle);
+    router.replace("/welcome");
   }, [blocked, router]);
 
   if (blocked) return null;

@@ -47,8 +47,8 @@ type Session = {
 };
 
 const DEFAULT_SESSION: Session = {
-  name: "Sam Manager",
-  email: "sam@goparkwell.com",
+  name: "",
+  email: "",
   role: "requester",
 };
 
@@ -247,11 +247,15 @@ export function nextOrderId(): string {
 }
 
 export function saveOrder(order: Order) {
-  const orders = readOrders();
-  const idx = orders.findIndex((o) => o.id === order.id);
-  if (idx >= 0) orders[idx] = order;
-  else orders.unshift(order);
-  writeOrders(orders);
+  // Must produce a NEW array reference. useSyncExternalStore compares snapshots
+  // by Object.is — mutating the cached array in place would skip re-renders.
+  const current = readOrders();
+  const idx = current.findIndex((o) => o.id === order.id);
+  const next =
+    idx >= 0
+      ? current.map((o, i) => (i === idx ? order : o))
+      : [order, ...current];
+  writeOrders(next);
 }
 
 export function deleteOrder(id: string) {

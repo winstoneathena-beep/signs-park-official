@@ -18,12 +18,17 @@ export default function DashboardPage() {
   const [selected, setSelected] = useState<Order | null>(null);
 
   const counts = useMemo(() => {
-    const c = { all: 0, pending: 0, approved: 0, ordered: 0 } as Record<string, number>;
+    const c = {
+      all: 0,
+      draft: 0,
+      pending: 0,
+      approved: 0,
+      ordered: 0,
+      rejected: 0,
+    } as Record<string, number>;
     for (const o of orders) {
       c.all += 1;
-      if (o.status === "pending") c.pending += 1;
-      if (o.status === "approved") c.approved += 1;
-      if (o.status === "ordered") c.ordered += 1;
+      c[o.status] = (c[o.status] ?? 0) + 1;
     }
     return c;
   }, [orders]);
@@ -114,9 +119,21 @@ export default function DashboardPage() {
         <div className="rounded-2xl border border-border bg-card p-6">
           <h2 className="font-semibold">By status</h2>
           <div className="mt-4 space-y-3">
-            {(["pending", "approved", "ordered"] as OrderStatus[]).map((s) => {
+            {(
+              ["draft", "pending", "approved", "ordered", "rejected"] as OrderStatus[]
+            ).map((s) => {
               const n = orders.filter((o) => o.status === s).length;
               const pct = orders.length ? Math.round((n / orders.length) * 100) : 0;
+              const bar =
+                s === "pending"
+                  ? "bg-parkwell-yellow"
+                  : s === "approved"
+                    ? "bg-parkwell-green"
+                    : s === "ordered"
+                      ? "bg-parkwell-blue"
+                      : s === "rejected"
+                        ? "bg-parkwell-red"
+                        : "bg-muted-foreground/50";
               return (
                 <div key={s}>
                   <div className="flex items-center justify-between text-sm mb-1.5">
@@ -125,14 +142,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                     <div
-                      className={cn(
-                        "h-full rounded-full",
-                        s === "pending"
-                          ? "bg-parkwell-yellow"
-                          : s === "approved"
-                            ? "bg-parkwell-green"
-                            : "bg-parkwell-blue",
-                      )}
+                      className={cn("h-full rounded-full", bar)}
                       style={{ width: `${pct}%` }}
                     />
                   </div>

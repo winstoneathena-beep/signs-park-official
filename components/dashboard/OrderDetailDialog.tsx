@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -15,19 +16,20 @@ import {
   CheckCircle2,
   Truck,
   FileText,
+  Loader2,
 } from "lucide-react";
 import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
 import { useRouter } from "next/navigation";
 import { TEMPLATES_BY_ID } from "@/lib/sign-templates";
-import { saveOrder, useSession, type Order } from "@/lib/orders";
+import { saveOrder, useOrders, useSession, type Order } from "@/lib/orders";
 import { SignPreview } from "@/components/sign/SignPreview";
 import { userTag } from "@/lib/user-display";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "./StatusBadge";
 
 export function OrderDetailDialog({
-  order,
+  order: passedOrder,
   open,
   onOpenChange,
 }: {
@@ -37,8 +39,19 @@ export function OrderDetailDialog({
 }) {
   const router = useRouter();
   const { session } = useSession();
+  // Re-pull the latest version of the order from the store every render so
+  // that an in-dialog action (Approve, Mark-as-ordered, Request Revision)
+  // updates the badge + footer immediately without closing.
+  const orders = useOrders();
+  const order = useMemo(
+    () => (passedOrder ? orders.find((o) => o.id === passedOrder.id) ?? passedOrder : null),
+    [orders, passedOrder],
+  );
+
   const [revisionNote, setRevisionNote] = useState("");
   const [revisionError, setRevisionError] = useState(false);
+  const [pngPending, setPngPending] = useState(false);
+  const [pdfPending, setPdfPending] = useState(false);
   const revisionRef = useRef<HTMLTextAreaElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
@@ -57,34 +70,44 @@ export function OrderDetailDialog({
   const hasActionFooter = canApprove || canMarkOrdered || canCreatorEdit;
 
   const downloadPng = async () => {
-    if (!exportRef.current) return;
-    const url = await toPng(exportRef.current, {
-      pixelRatio: 2,
-      backgroundColor: "#ffffff",
-      cacheBust: true,
-    });
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${order.id}.png`;
-    a.click();
+    if (!exportRef.current || pngPending || pdfPending) return;
+    setPngPending(true);
+    try {
+      const url = await toPng(exportRef.current, {
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+        cacheBust: true,
+      });
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${order.id}.png`;
+      a.click();
+    } finally {
+      setPngPending(false);
+    }
   };
 
   const downloadPdf = async () => {
-    if (!exportRef.current) return;
-    const url = await toPng(exportRef.current, {
-      pixelRatio: 3,
-      backgroundColor: "#ffffff",
-      cacheBust: true,
-    });
-    const w = order.specs.widthIn;
-    const h = order.specs.heightIn;
-    const pdf = new jsPDF({
-      orientation: w > h ? "landscape" : "portrait",
-      unit: "in",
-      format: [w, h],
-    });
-    pdf.addImage(url, "PNG", 0, 0, w, h);
-    pdf.save(`${order.id}.pdf`);
+    if (!exportRef.current || pngPending || pdfPending) return;
+    setPdfPending(true);
+    try {
+      const url = await toPng(exportRef.current, {
+        pixelRatio: 3,
+        backgroundColor: "#ffffff",
+        cacheBust: true,
+      });
+      const w = order.specs.widthIn;
+      const h = order.specs.heightIn;
+      const pdf = new jsPDF({
+        orientation: w > h ? "landscape" : "portrait",
+        unit: "in",
+        format: [w, h],
+      });
+      pdf.addImage(url, "PNG", 0, 0, w, h);
+      pdf.save(`${order.id}.pdf`);
+    } finally {
+      setPdfPending(false);
+    }
   };
 
   const downloadSpecSheet = () => {
@@ -131,6 +154,10 @@ export function OrderDetailDialog({
     pdf.save(`${order.id}-specs.pdf`);
   };
 
+  // Action handlers no longer auto-close the dialog. We re-pull the order
+  // from the store on every render, so the badge + footer update in place —
+  // an approver can approve, see the green stamp, then immediately mark as
+  // ordered without re-opening anything.
   const approve = () => {
     saveOrder({
       ...order,
@@ -141,7 +168,6 @@ export function OrderDetailDialog({
       },
       updatedAt: Date.now(),
     });
-    onOpenChange(false);
   };
 
   const requestRevision = () => {
@@ -165,7 +191,6 @@ export function OrderDetailDialog({
     });
     setRevisionNote("");
     setRevisionError(false);
-    onOpenChange(false);
   };
 
   const markOrdered = () => {
@@ -174,7 +199,6 @@ export function OrderDetailDialog({
       status: "ordered",
       updatedAt: Date.now(),
     });
-    onOpenChange(false);
   };
 
   const editSign = () => {
@@ -184,12 +208,18 @@ export function OrderDetailDialog({
     router.push(`/create?template=${order.templateId}&order=${order.id}`);
   };
 
+  const descriptionText = `${order.id} · ${tpl?.name ?? order.templateId} for ${order.location || "no location"} — ${order.specs.quantity} × ${order.specs.widthIn}" × ${order.specs.heightIn}" on ${order.specs.material}.`;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="!max-w-6xl !p-0 w-[calc(100vw-2rem)] sm:w-[calc(100vw-4rem)] h-[calc(100vh-3rem)] sm:h-[min(calc(100vh-4rem),900px)] gap-0 grid-rows-[auto_1fr_auto] overflow-hidden"
         showCloseButton={false}
+        aria-describedby="order-detail-description"
       >
+        <DialogDescription id="order-detail-description" className="sr-only">
+          {descriptionText}
+        </DialogDescription>
         {/* ============ Sticky header ============ */}
         <header className="flex items-center justify-between gap-4 px-6 py-4 border-b border-border bg-background">
           <div className="min-w-0 flex items-center gap-3">
@@ -306,9 +336,28 @@ export function OrderDetailDialog({
 
               <Section title="Vendor-ready files">
                 <div className="grid grid-cols-3 gap-2">
-                  <DownloadButton onClick={downloadPng} icon={Download} label="PNG" />
-                  <DownloadButton onClick={downloadPdf} icon={Download} label="Print PDF" />
-                  <DownloadButton onClick={downloadSpecSheet} icon={FileText} label="Spec sheet" />
+                  <DownloadButton
+                    onClick={downloadPng}
+                    icon={Download}
+                    label="PNG"
+                    busy={pngPending}
+                    busyLabel="Rendering…"
+                    disabled={pngPending || pdfPending}
+                  />
+                  <DownloadButton
+                    onClick={downloadPdf}
+                    icon={Download}
+                    label="Print PDF"
+                    busy={pdfPending}
+                    busyLabel="Generating PDF…"
+                    disabled={pngPending || pdfPending}
+                  />
+                  <DownloadButton
+                    onClick={downloadSpecSheet}
+                    icon={FileText}
+                    label="Spec sheet"
+                    disabled={pngPending || pdfPending}
+                  />
                 </div>
               </Section>
 
@@ -466,20 +515,29 @@ function DownloadButton({
   onClick,
   icon: Icon,
   label,
+  busy,
+  busyLabel,
+  disabled,
 }: {
   onClick: () => void;
   icon: React.ElementType;
   label: string;
+  busy?: boolean;
+  busyLabel?: string;
+  disabled?: boolean;
 }) {
+  const ShownIcon = busy ? Loader2 : Icon;
+  const shownLabel = busy && busyLabel ? busyLabel : label;
   return (
     <Button
       onClick={onClick}
+      disabled={disabled}
       variant="outline"
       className="h-11 rounded-full border-2 hover:border-parkwell-blue hover:text-parkwell-blue transition-colors"
     >
-      <Icon className="h-4 w-4 mr-1.5" />
-      <span className="hidden sm:inline">{label}</span>
-      <span className="sm:hidden text-xs">{label.split(" ")[0]}</span>
+      <ShownIcon className={cn("h-4 w-4 mr-1.5", busy && "animate-spin")} />
+      <span className="hidden sm:inline">{shownLabel}</span>
+      <span className="sm:hidden text-xs">{shownLabel.split(" ")[0]}</span>
     </Button>
   );
 }

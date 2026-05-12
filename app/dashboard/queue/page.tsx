@@ -45,9 +45,9 @@ export default function QueuePage() {
                 <button
                   type="button"
                   onClick={() => setSelected(o)}
-                  className="w-full text-left rounded-2xl border border-border bg-card overflow-hidden hover:border-parkwell-yellow/60 hover:shadow-md transition-all flex"
+                  className="w-full text-left rounded-2xl border border-border bg-card overflow-hidden hover:border-parkwell-yellow/60 hover:shadow-md transition-all flex items-stretch"
                 >
-                  <div className="relative w-32 shrink-0 bg-muted/40 border-r border-border">
+                  <div className="relative w-32 shrink-0 self-stretch bg-muted/40 border-r border-border min-h-32">
                     {tpl && (
                       <Image
                         src={tpl.sourceImage}
