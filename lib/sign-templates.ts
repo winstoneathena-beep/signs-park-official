@@ -1072,13 +1072,29 @@ const SIGN_11: SignTemplate = {
   ]),
   materials: ["Aluminium", "Dibond"],
   editableFields: [
-    // Red header bbox starts AFTER the P-mark icon so the bg-fill mask
-    // doesn't clip the icon when the user types. Cover the full red band.
+    // Every bbox is pixel-scanned to match the canonical text band exactly
+    // so that user-typed content lands in the same visual position as the
+    // canonical placeholder. Taller-than-canonical bboxes were causing
+    // typed text to drift lower (valign:center).
+    //
+    // Canonical text bands (PNG y-norm):
+    //   "PAYMENT IS"    line 1   y=0.054..0.083
+    //   "REQUIRED 24/7" line 2   y=0.106..0.135
+    //   header total             y=0.054..0.135
+    //   lead line                y=0.223..0.256
+    //   para 1 (2 lines)         y=0.306..0.371
+    //   para 2 (2 lines)         y=0.428..0.501
+    //   para 3 (5 lines)         y=0.550..0.738
+    //   para 4 (4 lines)         y=0.794..0.942
     {
       id: "header",
       label: "Red header",
       type: "headline",
-      bbox: { x: 0.28, y: 0.025, w: 0.70, h: 0.165 },
+      // Bbox centered on the canonical text band (center y=0.094) with
+      // ±0.055 margin so descenders / antialiased edges of canonical
+      // "PAYMENT IS / REQUIRED 24/7" can't peek through. Left starts at
+      // x=0.28 to clear the P-mark icon.
+      bbox: { x: 0.28, y: 0.040, w: 0.70, h: 0.108 },
       placeholder: "PAYMENT IS\nREQUIRED 24/7",
       style: {
         color: C.white,
@@ -1096,7 +1112,7 @@ const SIGN_11: SignTemplate = {
       id: "leadLine",
       label: "Bolded lead line",
       type: "headline",
-      bbox: { x: 0.04, y: 0.205, w: 0.92, h: 0.075 },
+      bbox: { x: 0.04, y: 0.213, w: 0.92, h: 0.054 },
       placeholder: "No free parking any time.",
       style: {
         color: C.ink,
@@ -1108,20 +1124,21 @@ const SIGN_11: SignTemplate = {
       },
       constraints: { maxChars: 50, maxRows: 1 },
     },
-    // Body is split into 4 separately-editable paragraphs. Each fits into
-    // its own visible section in the PNG (blank lines between).
+    // Body is split into 4 separately-editable paragraphs. Each bbox is
+    // pinned to its canonical text band so typed content lands where the
+    // placeholder visually sits.
     {
       id: "bodyPara1",
       label: "Paragraph 1",
       type: "body",
-      bbox: { x: 0.04, y: 0.290, w: 0.92, h: 0.115 },
+      bbox: { x: 0.04, y: 0.292, w: 0.92, h: 0.094 },
       placeholder:
         "Payment is required to avoid additional fees & penalties.",
       style: {
         color: C.ink,
         bgColor: C.white,
         fontWeight: 400,
-        fontSize: 0.026,
+        fontSize: 0.032,
         align: "center",
         valign: "center",
         lineHeight: 1.4,
@@ -1131,14 +1148,14 @@ const SIGN_11: SignTemplate = {
       id: "bodyPara2",
       label: "Paragraph 2",
       type: "body",
-      bbox: { x: 0.04, y: 0.410, w: 0.92, h: 0.105 },
+      bbox: { x: 0.04, y: 0.414, w: 0.92, h: 0.102 },
       placeholder:
         "This lot is monitored 24/7 by license plate reading technology.",
       style: {
         color: C.ink,
         bgColor: C.white,
         fontWeight: 400,
-        fontSize: 0.026,
+        fontSize: 0.032,
         align: "center",
         valign: "center",
         lineHeight: 1.4,
@@ -1148,14 +1165,14 @@ const SIGN_11: SignTemplate = {
       id: "bodyPara3",
       label: "Paragraph 3",
       type: "body",
-      bbox: { x: 0.04, y: 0.525, w: 0.92, h: 0.215 },
+      bbox: { x: 0.04, y: 0.536, w: 0.92, h: 0.216 },
       placeholder:
         "Failure to pay for parking will result in a violation notice with corresponding fee sent to vehicle owner's address. This is in addition to the parking fee.",
       style: {
         color: C.ink,
         bgColor: C.white,
         fontWeight: 400,
-        fontSize: 0.026,
+        fontSize: 0.032,
         align: "center",
         valign: "center",
         lineHeight: 1.4,
@@ -1165,14 +1182,14 @@ const SIGN_11: SignTemplate = {
       id: "bodyPara4",
       label: "Paragraph 4",
       type: "body",
-      bbox: { x: 0.04, y: 0.745, w: 0.92, h: 0.235 },
+      bbox: { x: 0.04, y: 0.780, w: 0.92, h: 0.176 },
       placeholder:
         "Please note that if payment is not made within 30 days, all fees will be referred to a registered debt collection agency.",
       style: {
         color: C.ink,
         bgColor: C.white,
         fontWeight: 400,
-        fontSize: 0.026,
+        fontSize: 0.032,
         align: "center",
         valign: "center",
         lineHeight: 1.4,
@@ -1199,58 +1216,54 @@ const SIGN_12: SignTemplate = {
   ]),
   materials: ["Aluminium", "Dibond"],
   editableFields: [
-    // Only PARKING RATES and VIOLATIONS are editable. Every other cell —
-    // property name, address, hours, payment forms, payment instructions,
-    // limit-of-liability, contact info — is locked, rendered straight from
-    // the original brand-guide PNG.
+    // PARKING RATES is the only editable cell. Property name, address,
+    // hours, payment forms, payment instructions, limit-of-liability,
+    // violations, and contact info are all locked and rendered straight
+    // from the brand-guide PNG.
     //
-    // Cell measurements (pixel-scanned from the PNG, normalised):
-    //   Column divider runs at x ≈ 0.481 (so LEFT cell ends at ~x=0.478,
-    //   RIGHT cell starts at ~x=0.484).
-    //   Row 1/2 divider at y ≈ 0.316, row 2/3 at y ≈ 0.526, bottom at
-    //   y ≈ 0.965.
-    //   "PARKING RATES" header underline ends at y ≈ 0.346.
-    //   "VIOLATIONS:" header underline ends at y ≈ 0.550.
+    // Cell measurements (pixel-scanned, normalised):
+    //   Column divider at x = 0.481.
+    //   Row 1/2 divider at y = 0.316, row 2/3 at y = 0.526.
+    //   "PARKING RATES" header underline ends at y ≈ 0.345.
+    //   Three canonical rate rows at y = 0.370, 0.418, 0.463.
     //
-    // Bboxes are pinned a few px INSIDE each cell with inner padding so the
-    // bg-fill never touches a divider line or an adjacent cell.
+    // The rate cell is rendered as a structured rate-table so price and
+    // days are separate fields per row. Bbox pinned a safe margin inside
+    // every border so the bg-fill cannot touch a divider line.
     {
-      id: "ratesContent",
+      id: "rateTable",
       label: "Parking rates",
-      type: "body",
-      // Top edge sits just under the "PARKING RATES" underline so the canonical
-      // first line ("$10.00 WEEKDAY RATE") can't peek above the bg-fill.
-      bbox: { x: 0.045, y: 0.353, w: 0.42, h: 0.165 },
-      placeholder:
-        "$10.00    WEEKDAY RATE\n$5.00     NIGHTS\n$5.00     WEEKENDS",
+      type: "rate-table",
+      // The bbox must FULLY cover the canonical 3 rate rows AND clear the
+      // surrounding dividers. Canonical text bands (pixel-scanned):
+      //   row 1 ($10.00 WEEKDAY RATE) y=0.367..0.380
+      //   row 2 ($5.00 NIGHTS)        y=0.411..0.424
+      //   row 3 ($5.00 WEEKENDS)      y=0.456..0.469
+      //   "PARKING RATES" underline    y=0.345
+      //   row 2/3 divider              y=0.526
+      //   column divider               x=0.481
+      // bbox: top covers row 1 with 12px margin, bottom 16-screen-px above
+      // divider, right 16-screen-px left of column divider.
+      bbox: { x: 0.07, y: 0.355, w: 0.385, h: 0.145 },
+      placeholder: "",
+      defaultRows: [
+        { label: "$10.00", sub: "", rates: ["WEEKDAY RATE"] },
+        { label: "$5.00", sub: "", rates: ["NIGHTS"] },
+        { label: "$5.00", sub: "", rates: ["WEEKENDS"] },
+      ],
       style: {
         color: C.ink,
         bgColor: C.white,
         fontWeight: 500,
-        fontSize: 0.02,
-        align: "center",
+        fontSize: 0.022,
+        align: "left",
         valign: "center",
-        lineHeight: 1.4,
+        lineHeight: 1.3,
+        // Narrow price ($X.XX) column on the left so the days column has
+        // enough room for "WEEKDAY RATE" on one line.
+        columnSplit: 0.30,
       },
-    },
-    {
-      id: "violationsContent",
-      label: "Violations content",
-      type: "body",
-      // Top edge sits just under the "VIOLATIONS:" underline so the canonical
-      // first line can't peek above the bg-fill.
-      bbox: { x: 0.515, y: 0.553, w: 0.44, h: 0.40 },
-      placeholder:
-        "PAID PARKING IS STRICTLY ENFORCED 24/7. NOTICES/FINES ARE ISSUED FOR NON-PAYMENT, EXCEEDING ALLOTTED TIME, OR PARKING IN UNAUTHORIZED SPACES. WE RESERVE THE RIGHT TO TOW FOR UNAUTHORIZED PARKING. FEES & ESCALATIONS: $45 IF PAID WITHIN 14 DAYS, $95 IF PAID AFTER. TO DISPUTE A VIOLATION, EMAIL NOTICES@GOPARKWELL.COM",
-      style: {
-        color: C.ink,
-        bgColor: C.white,
-        fontWeight: 500,
-        fontSize: 0.02,
-        align: "center",
-        valign: "top",
-        lineHeight: 1.4,
-      },
+      constraints: { maxRows: 5 },
     },
   ],
 };
