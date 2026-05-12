@@ -128,7 +128,9 @@ const SIGN_01: SignTemplate = {
       id: "headline",
       label: "Top headline",
       type: "headline",
-      bbox: { x: 0.05, y: 0.025, w: 0.9, h: 0.085 },
+      // Generous bbox so bgColor fully masks the PNG "PAY HERE" text underneath
+      // when the user types a replacement.
+      bbox: { x: 0.04, y: 0.015, w: 0.92, h: 0.115 },
       placeholder: "PAY HERE",
       style: {
         color: C.white,
@@ -160,7 +162,9 @@ const SIGN_01: SignTemplate = {
       id: "qrCaption",
       label: "QR caption",
       type: "headline",
-      bbox: { x: 0.13, y: 0.55, w: 0.74, h: 0.07 },
+      // PNG "SCAN TO PAY" caption inside the dark container sits at
+      // y=0.613-0.644 (measured via pixel scan). Tight band over that text.
+      bbox: { x: 0.13, y: 0.600, w: 0.74, h: 0.06 },
       placeholder: "SCAN TO PAY",
       style: {
         color: C.white,
@@ -177,7 +181,9 @@ const SIGN_01: SignTemplate = {
       id: "body",
       label: "Bottom messaging",
       type: "body",
-      bbox: { x: 0.07, y: 0.66, w: 0.86, h: 0.13 },
+      // PNG canonical body text has been cleaned from the asset. Bbox places
+      // user's text in the same spot where the canonical 3-line caption sat.
+      bbox: { x: 0.04, y: 0.695, w: 0.92, h: 0.14 },
       placeholder:
         "No need to download an app.\nEnter license plate, payment info, and be on your way.",
       style: {
@@ -216,7 +222,8 @@ const SIGN_02: SignTemplate = {
       id: "headline",
       label: "Headline",
       type: "headline",
-      bbox: { x: 0.05, y: 0.05, w: 0.9, h: 0.22 },
+      // PNG "PAY HERE" takes the full upper band; cover generously.
+      bbox: { x: 0.04, y: 0.03, w: 0.92, h: 0.26 },
       placeholder: "PAY HERE",
       style: {
         color: C.white,
@@ -242,8 +249,9 @@ const SIGN_02: SignTemplate = {
       id: "qrCaption",
       label: "QR caption",
       type: "headline",
-      // Inside the rounded dark container, just below the QR.
-      bbox: { x: 0.06, y: 0.65, w: 0.24, h: 0.07 },
+      // Inside the rounded dark container. PNG "SCAN TO PAY" caption sits at
+      // y=0.65-0.68 (measured via pixel scan). Cover that band tightly.
+      bbox: { x: 0.06, y: 0.635, w: 0.245, h: 0.06 },
       placeholder: "SCAN TO PAY",
       style: {
         color: C.white,
@@ -260,7 +268,8 @@ const SIGN_02: SignTemplate = {
       id: "steps",
       label: "Numbered steps",
       type: "list",
-      bbox: { x: 0.36, y: 0.32, w: 0.6, h: 0.5 },
+      // Cover the full numbered-step block (incl. PNG digits column).
+      bbox: { x: 0.34, y: 0.30, w: 0.62, h: 0.54 },
       placeholder: [
         "Park and then scan the QR code",
         "Enter your information and start session",
@@ -283,7 +292,9 @@ const SIGN_02: SignTemplate = {
       id: "footnote",
       label: "Footnote",
       type: "body",
-      bbox: { x: 0.36, y: 0.85, w: 0.6, h: 0.08 },
+      // PNG footnote text has been cleaned from the asset; this bbox places
+      // the user's text in the same spot where the canonical sat (~y=0.74).
+      bbox: { x: 0.34, y: 0.735, w: 0.62, h: 0.075 },
       placeholder: "*60-minute validated parking for tenant visitors",
       style: {
         color: C.white,
@@ -321,7 +332,8 @@ const SIGN_03: SignTemplate = {
       id: "locationName",
       label: "Location name",
       type: "headline",
-      bbox: { x: 0.07, y: 0.026, w: 0.86, h: 0.13 },
+      // PNG white "WELCOME TO LOCATION NAME" band: cover the full band.
+      bbox: { x: 0.04, y: 0.015, w: 0.92, h: 0.16 },
       placeholder: "WELCOME TO\nLOCATION NAME",
       style: {
         color: C.ink,
@@ -339,7 +351,8 @@ const SIGN_03: SignTemplate = {
       id: "rateTitle",
       label: "Rate section title",
       type: "headline",
-      bbox: { x: 0.07, y: 0.18, w: 0.86, h: 0.08 },
+      // PNG green "PARKING RATES" strip.
+      bbox: { x: 0.04, y: 0.175, w: 0.92, h: 0.095 },
       placeholder: "PARKING RATES",
       style: {
         color: C.white,
@@ -356,7 +369,8 @@ const SIGN_03: SignTemplate = {
       id: "rateTable",
       label: "Parking rates",
       type: "rate-table",
-      bbox: { x: 0.07, y: 0.288, w: 0.86, h: 0.36 },
+      // Cover the full 3-row rate table area.
+      bbox: { x: 0.04, y: 0.278, w: 0.92, h: 0.39 },
       placeholder: "",
       style: {
         color: C.white,
@@ -374,7 +388,8 @@ const SIGN_03: SignTemplate = {
       id: "additional",
       label: "Additional messaging",
       type: "body",
-      bbox: { x: 0.1, y: 0.69, w: 0.8, h: 0.12 },
+      // PNG 3-line additional messaging block.
+      bbox: { x: 0.05, y: 0.68, w: 0.9, h: 0.15 },
       placeholder:
         "$35 lost ticket fee.\nNew day starts at 5am.\nEvent rates may apply.",
       style: {
@@ -415,7 +430,8 @@ const SIGN_04: SignTemplate = {
       id: "propertyName",
       label: "Property name",
       type: "headline",
-      bbox: { x: 0.05, y: 0.04, w: 0.9, h: 0.09 },
+      // Top half of the white property header band.
+      bbox: { x: 0.03, y: 0.03, w: 0.94, h: 0.105 },
       placeholder: "PROPERTY",
       style: {
         color: C.ink,
@@ -432,7 +448,8 @@ const SIGN_04: SignTemplate = {
       id: "propertySubtitle",
       label: "Property subtitle",
       type: "text",
-      bbox: { x: 0.05, y: 0.13, w: 0.9, h: 0.04 },
+      // Lower half of the white property header band where "DENVER" / city sits.
+      bbox: { x: 0.03, y: 0.135, w: 0.94, h: 0.05 },
       placeholder: "CITY",
       style: {
         color: C.ink,
@@ -449,7 +466,8 @@ const SIGN_04: SignTemplate = {
       id: "rateTitle",
       label: "Rate section title",
       type: "headline",
-      bbox: { x: 0.05, y: 0.21, w: 0.9, h: 0.08 },
+      // PNG "VALET PARKING RATES" strip — give it a comfortable band.
+      bbox: { x: 0.03, y: 0.198, w: 0.94, h: 0.105 },
       placeholder: "VALET PARKING RATES",
       style: {
         color: C.white,
@@ -466,7 +484,8 @@ const SIGN_04: SignTemplate = {
       id: "valetRates",
       label: "Valet rates (one per line: PRICE   DURATION)",
       type: "body",
-      bbox: { x: 0.1, y: 0.31, w: 0.8, h: 0.21 },
+      // 4 rate lines stacked — give the full middle band.
+      bbox: { x: 0.05, y: 0.305, w: 0.9, h: 0.235 },
       placeholder:
         "$20    0-4 hour\n$32    4-8 hours\n$53    8+ hours\n$53    Overnight",
       style: {
@@ -484,7 +503,7 @@ const SIGN_04: SignTemplate = {
       id: "validatedTitle",
       label: "Validated header",
       type: "headline",
-      bbox: { x: 0.1, y: 0.555, w: 0.8, h: 0.06 },
+      bbox: { x: 0.06, y: 0.545, w: 0.88, h: 0.075 },
       placeholder: "VALIDATED RATE",
       style: {
         color: C.white,
@@ -501,7 +520,7 @@ const SIGN_04: SignTemplate = {
       id: "validatedRate",
       label: "Validated rate price",
       type: "text",
-      bbox: { x: 0.1, y: 0.62, w: 0.8, h: 0.06 },
+      bbox: { x: 0.06, y: 0.625, w: 0.88, h: 0.075 },
       placeholder: "$12   0-4 hours",
       style: {
         color: C.white,
@@ -517,7 +536,8 @@ const SIGN_04: SignTemplate = {
       id: "validatedLocations",
       label: "Validated locations",
       type: "list",
-      bbox: { x: 0.1, y: 0.69, w: 0.8, h: 0.06 },
+      // Wider bbox so the first letter (e.g. "T" in Tavernetta) isn't clipped.
+      bbox: { x: 0.05, y: 0.705, w: 0.9, h: 0.08 },
       placeholder: ["Tavernetta", "Sunday Vinyl"],
       style: {
         color: C.white,
@@ -553,7 +573,8 @@ const SIGN_05: SignTemplate = {
       id: "headline",
       label: "Headline (right of P-mark)",
       type: "headline",
-      bbox: { x: 0.36, y: 0.1, w: 0.6, h: 0.32 },
+      // PNG "PUBLIC PARKING" — cover the full 2-line block height.
+      bbox: { x: 0.34, y: 0.08, w: 0.64, h: 0.38 },
       placeholder: "PUBLIC\nPARKING",
       style: {
         color: C.white,
@@ -567,19 +588,22 @@ const SIGN_05: SignTemplate = {
       },
       constraints: { maxChars: 18, maxRows: 2 },
     },
+    // Rate strip cells — bboxes cover each half of the Ink rate strip so
+    // bg-fill decisively masks the PNG placeholder text.
     {
       id: "rateLeft",
       label: "Left rate cell",
       type: "text",
-      bbox: { x: 0.04, y: 0.83, w: 0.46, h: 0.13 },
+      bbox: { x: 0.0, y: 0.795, w: 0.50, h: 0.205 },
       placeholder: "$10 Per Day",
       style: {
         color: C.white,
         bgColor: C.ink,
         fontWeight: 700,
-        fontSize: 0.06,
+        fontSize: 0.055,
         align: "center",
         valign: "center",
+        lineHeight: 1.1,
       },
       constraints: { maxChars: 18 },
     },
@@ -587,15 +611,16 @@ const SIGN_05: SignTemplate = {
       id: "rateRight",
       label: "Right rate cell",
       type: "text",
-      bbox: { x: 0.5, y: 0.83, w: 0.46, h: 0.13 },
+      bbox: { x: 0.50, y: 0.795, w: 0.50, h: 0.205 },
       placeholder: "$5 Nights & Weekends",
       style: {
         color: C.white,
         bgColor: C.ink,
         fontWeight: 700,
-        fontSize: 0.05,
+        fontSize: 0.045,
         align: "center",
         valign: "center",
+        lineHeight: 1.1,
       },
       constraints: { maxChars: 22 },
     },
@@ -622,7 +647,8 @@ const SIGN_05B: SignTemplate = {
       id: "headline",
       label: "Headline (right of P-mark)",
       type: "headline",
-      bbox: { x: 0.36, y: 0.31, w: 0.6, h: 0.32 },
+      // PNG "PUBLIC PARKING" (cropped from #5, shifted down on the 5b canvas).
+      bbox: { x: 0.34, y: 0.29, w: 0.64, h: 0.38 },
       placeholder: "PUBLIC\nPARKING",
       style: {
         color: C.white,
@@ -663,7 +689,8 @@ const SIGN_06: SignTemplate = {
       id: "headline",
       label: "Headline",
       type: "headline",
-      bbox: { x: 0.32, y: 0.05, w: 0.6, h: 0.18 },
+      // PNG "EVENT PARKING" stacked next to the P-mark; cover the full 2-line block.
+      bbox: { x: 0.30, y: 0.035, w: 0.66, h: 0.215 },
       placeholder: "EVENT\nPARKING",
       style: {
         color: C.white,
@@ -681,7 +708,8 @@ const SIGN_06: SignTemplate = {
       id: "price",
       label: "Headline price",
       type: "headline",
-      bbox: { x: 0.1, y: 0.31, w: 0.8, h: 0.32 },
+      // The oversized "$10" PNG numeral block.
+      bbox: { x: 0.05, y: 0.295, w: 0.9, h: 0.35 },
       placeholder: "$10",
       style: {
         color: C.white,
@@ -698,7 +726,8 @@ const SIGN_06: SignTemplate = {
       id: "additional",
       label: "Additional messaging",
       type: "body",
-      bbox: { x: 0.1, y: 0.66, w: 0.8, h: 0.13 },
+      // PNG "Additional Messaging" block (2 lines).
+      bbox: { x: 0.05, y: 0.65, w: 0.9, h: 0.15 },
       placeholder: "Additional Messaging",
       style: {
         color: C.white,
@@ -736,7 +765,8 @@ const SIGN_07: SignTemplate = {
       id: "locationName",
       label: "Welcome banner",
       type: "headline",
-      bbox: { x: 0.07, y: 0.03, w: 0.86, h: 0.16 },
+      // PNG white welcome banner — give it the full top white band.
+      bbox: { x: 0.04, y: 0.015, w: 0.92, h: 0.205 },
       placeholder: "WELCOME TO\nLOCATION NAME",
       style: {
         color: C.ink,
@@ -754,7 +784,9 @@ const SIGN_07: SignTemplate = {
       id: "directionLabel",
       label: "Direction label",
       type: "headline",
-      bbox: { x: 0.07, y: 0.27, w: 0.86, h: 0.25 },
+      // PNG "PUBLIC PARKING" — extend down to cover the descender of "G" in
+      // PARKING but stop short of the chevron below so the chevron stays clean.
+      bbox: { x: 0.04, y: 0.25, w: 0.92, h: 0.27 },
       placeholder: "PUBLIC\nPARKING",
       style: {
         color: C.white,
@@ -793,7 +825,10 @@ const SIGN_08: SignTemplate = {
       id: "directionWord",
       label: "Vertical direction word",
       type: "text",
-      bbox: { x: 0.05, y: 0.4, w: 0.9, h: 0.55 },
+      // The PNG has the canonical "ENTER" letters painted out (cleaned to
+      // parkwell-blue) so this bbox can sit cleanly inside the blue panel
+      // without touching the wave above.
+      bbox: { x: 0.05, y: 0.30, w: 0.9, h: 0.65 },
       placeholder: "ENTER",
       style: {
         color: C.white,
@@ -833,7 +868,8 @@ const SIGN_09A: SignTemplate = {
       id: "headline",
       label: "Headline (3 lines)",
       type: "headline",
-      bbox: { x: 0.05, y: 0.06, w: 0.9, h: 0.5 },
+      // 3-line headline block — cover generously.
+      bbox: { x: 0.03, y: 0.04, w: 0.94, h: 0.55 },
       placeholder: "RESERVED\nPARKING\n24/7",
       style: {
         color: C.white,
@@ -851,7 +887,9 @@ const SIGN_09A: SignTemplate = {
       id: "violatorNotice",
       label: "Violator notice",
       type: "body",
-      bbox: { x: 0.08, y: 0.6, w: 0.84, h: 0.12 },
+      // Bbox bottom kept clear of the wave footer (which starts ~y=0.76)
+      // so the bg-fill doesn't clip the wave's curved top edge.
+      bbox: { x: 0.04, y: 0.60, w: 0.92, h: 0.135 },
       placeholder:
         "Violators will be cited and/or towed at vehicle owner's expense",
       style: {
@@ -899,7 +937,7 @@ const SIGN_09C: SignTemplate = {
       id: "headline",
       label: "Headline",
       type: "headline",
-      bbox: { x: 0.05, y: 0.06, w: 0.9, h: 0.18 },
+      bbox: { x: 0.03, y: 0.04, w: 0.94, h: 0.22 },
       placeholder: "ATTENTION:",
       style: {
         color: C.white,
@@ -916,7 +954,7 @@ const SIGN_09C: SignTemplate = {
       id: "body",
       label: "Body message",
       type: "body",
-      bbox: { x: 0.05, y: 0.27, w: 0.9, h: 0.2 },
+      bbox: { x: 0.03, y: 0.25, w: 0.94, h: 0.24 },
       placeholder: "Parking for tenants and\ntenant visitors only",
       style: {
         color: C.white,
@@ -933,7 +971,7 @@ const SIGN_09C: SignTemplate = {
       id: "violatorNotice",
       label: "Violator notice",
       type: "body",
-      bbox: { x: 0.08, y: 0.55, w: 0.84, h: 0.12 },
+      bbox: { x: 0.04, y: 0.55, w: 0.92, h: 0.135 },
       placeholder:
         "Violators will be cited and/or towed at vehicle owner's expense",
       style: {
@@ -968,48 +1006,15 @@ const SIGN_10: SignTemplate = {
   ]),
   materials: ["Aluminium", "Dibond"],
   editableFields: [
-    // Header bbox starts AFTER the P-mark icon (around x=0.30) so the bg-fill
-    // mask doesn't clip the icon when the user types.
-    {
-      id: "title",
-      label: "Header title",
-      type: "headline",
-      bbox: { x: 0.30, y: 0.04, w: 0.66, h: 0.13 },
-      placeholder: "LIMIT OF LIABILITY\n& FACILITY RULES",
-      style: {
-        color: C.white,
-        bgColor: C.ink,
-        fontWeight: 700,
-        fontSize: 0.04,
-        align: "left",
-        valign: "center",
-        transform: "uppercase",
-        lineHeight: 1.1,
-      },
-      constraints: { maxChars: 60, maxRows: 2 },
-    },
-    {
-      id: "liabilityBody",
-      label: "Liability paragraph",
-      type: "body",
-      bbox: { x: 0.06, y: 0.2, w: 0.88, h: 0.27 },
-      placeholder:
-        "Parkwell, LLC, the property owner(s) and their agents, employees or affiliates do not guard or assume care, custody or control of your vehicle or its contents and is not responsible for fire, theft, damage or loss. Any vehicle parked at this facility is parked at the vehicle owner's sole risk. By parking in this facility, you accept this contract and agree to abide by the posted rules in the facility. If you do not accept all or part of this contract, you may leave within 10 minutes at no charge. Failure to abide by the posted rules and applicable parking laws and ordinances may result in a fine, citation or towing. No employee may modify or waive any part of this contract.",
-      style: {
-        color: C.ink,
-        bgColor: C.white,
-        fontWeight: 400,
-        fontSize: 0.022,
-        align: "left",
-        valign: "top",
-        lineHeight: 1.35,
-      },
-    },
+    // Title ("LIMIT OF LIABILITY & FACILITY RULES") and the liability
+    // paragraph are LOCKED — they're legal-required content baked into the
+    // PNG and must not change between locations. Only the facility-rules
+    // bullet list is editable.
     {
       id: "facilityRules",
       label: "Facility rules (bullets)",
       type: "list",
-      bbox: { x: 0.06, y: 0.49, w: 0.88, h: 0.49 },
+      bbox: { x: 0.04, y: 0.50, w: 0.92, h: 0.48 },
       placeholder: [
         "Skateboarding, rollerblading, bicycle riding or similar activities are strictly prohibited.",
         "Garage ramp is for vehicles only. Pedestrians should not walk up or down them.",
@@ -1054,12 +1059,12 @@ const SIGN_11: SignTemplate = {
   materials: ["Aluminium", "Dibond"],
   editableFields: [
     // Red header bbox starts AFTER the P-mark icon so the bg-fill mask
-    // doesn't clip the icon when the user types.
+    // doesn't clip the icon when the user types. Cover the full red band.
     {
       id: "header",
       label: "Red header",
       type: "headline",
-      bbox: { x: 0.32, y: 0.05, w: 0.64, h: 0.13 },
+      bbox: { x: 0.28, y: 0.025, w: 0.70, h: 0.165 },
       placeholder: "PAYMENT IS\nREQUIRED 24/7",
       style: {
         color: C.white,
@@ -1077,7 +1082,7 @@ const SIGN_11: SignTemplate = {
       id: "leadLine",
       label: "Bolded lead line",
       type: "headline",
-      bbox: { x: 0.07, y: 0.215, w: 0.86, h: 0.055 },
+      bbox: { x: 0.04, y: 0.205, w: 0.92, h: 0.075 },
       placeholder: "No free parking any time.",
       style: {
         color: C.ink,
@@ -1095,7 +1100,7 @@ const SIGN_11: SignTemplate = {
       id: "bodyPara1",
       label: "Paragraph 1",
       type: "body",
-      bbox: { x: 0.07, y: 0.305, w: 0.86, h: 0.095 },
+      bbox: { x: 0.04, y: 0.290, w: 0.92, h: 0.115 },
       placeholder:
         "Payment is required to avoid additional fees & penalties.",
       style: {
@@ -1112,7 +1117,7 @@ const SIGN_11: SignTemplate = {
       id: "bodyPara2",
       label: "Paragraph 2",
       type: "body",
-      bbox: { x: 0.07, y: 0.420, w: 0.86, h: 0.085 },
+      bbox: { x: 0.04, y: 0.410, w: 0.92, h: 0.105 },
       placeholder:
         "This lot is monitored 24/7 by license plate reading technology.",
       style: {
@@ -1129,7 +1134,7 @@ const SIGN_11: SignTemplate = {
       id: "bodyPara3",
       label: "Paragraph 3",
       type: "body",
-      bbox: { x: 0.07, y: 0.535, w: 0.86, h: 0.190 },
+      bbox: { x: 0.04, y: 0.525, w: 0.92, h: 0.215 },
       placeholder:
         "Failure to pay for parking will result in a violation notice with corresponding fee sent to vehicle owner's address. This is in addition to the parking fee.",
       style: {
@@ -1146,7 +1151,7 @@ const SIGN_11: SignTemplate = {
       id: "bodyPara4",
       label: "Paragraph 4",
       type: "body",
-      bbox: { x: 0.07, y: 0.755, w: 0.86, h: 0.210 },
+      bbox: { x: 0.04, y: 0.745, w: 0.92, h: 0.235 },
       placeholder:
         "Please note that if payment is not made within 30 days, all fees will be referred to a registered debt collection agency.",
       style: {
@@ -1180,150 +1185,47 @@ const SIGN_12: SignTemplate = {
   ]),
   materials: ["Aluminium", "Dibond"],
   editableFields: [
-    {
-      id: "propertyName",
-      label: "Property / company name",
-      type: "headline",
-      bbox: { x: 0.05, y: 0.025, w: 0.9, h: 0.06 },
-      placeholder: "Parkwell, LLC",
-      style: {
-        color: C.white,
-        bgColor: C.ink,
-        fontWeight: 700,
-        fontSize: 0.034,
-        align: "center",
-        valign: "center",
-      },
-      constraints: { maxChars: 30 },
-    },
-    {
-      id: "propertyAddress",
-      label: "Property address",
-      type: "text",
-      bbox: { x: 0.05, y: 0.085, w: 0.9, h: 0.05 },
-      placeholder: "2332 15th Street",
-      style: {
-        color: C.white,
-        bgColor: C.ink,
-        fontWeight: 600,
-        fontSize: 0.028,
-        align: "center",
-        valign: "center",
-      },
-      constraints: { maxChars: 40 },
-    },
-    // Row 1 — bboxes fit INSIDE each box's content area below the section
-    // header ("HOURS OF OPERATION", "FORMS OF PAYMENT ACCEPTED") which stays
-    // baked into the PNG. Same for all later rows.
-    {
-      id: "hoursContent",
-      label: "Hours of operation",
-      type: "body",
-      bbox: { x: 0.06, y: 0.205, w: 0.42, h: 0.085 },
-      placeholder: "PUBLIC PARKING\nOPEN DAILY 24/7",
-      style: {
-        color: C.ink,
-        bgColor: C.white,
-        fontWeight: 500,
-        fontSize: 0.022,
-        align: "center",
-        valign: "center",
-        lineHeight: 1.4,
-      },
-    },
-    {
-      id: "paymentContent",
-      label: "Forms of payment",
-      type: "list",
-      bbox: { x: 0.52, y: 0.205, w: 0.42, h: 0.085 },
-      placeholder: ["CREDIT/DEBIT CARD", "NO CASH"],
-      style: {
-        color: C.ink,
-        bgColor: C.white,
-        fontWeight: 500,
-        fontSize: 0.022,
-        align: "left",
-        valign: "center",
-        bulletStyle: "•",
-        lineHeight: 1.4,
-      },
-    },
-    // Row 2
+    // Only PARKING RATES and VIOLATIONS are editable. Every other cell —
+    // property name, address, hours, payment forms, payment instructions,
+    // limit-of-liability, contact info — is locked, rendered straight from
+    // the original brand-guide PNG.
+    //
+    // Cell measurements (pixel-scanned from the PNG, normalised):
+    //   Column divider runs at x ≈ 0.481 (so LEFT cell ends at ~x=0.478,
+    //   RIGHT cell starts at ~x=0.484).
+    //   Row 1/2 divider at y ≈ 0.316, row 2/3 at y ≈ 0.526, bottom at
+    //   y ≈ 0.965.
+    //   "PARKING RATES" header underline ends at y ≈ 0.346.
+    //   "VIOLATIONS:" header underline ends at y ≈ 0.550.
+    //
+    // Bboxes are pinned a few px INSIDE each cell with inner padding so the
+    // bg-fill never touches a divider line or an adjacent cell.
     {
       id: "ratesContent",
       label: "Parking rates",
       type: "body",
-      bbox: { x: 0.06, y: 0.385, w: 0.42, h: 0.10 },
+      // Top edge sits just under the "PARKING RATES" underline so the canonical
+      // first line ("$10.00 WEEKDAY RATE") can't peek above the bg-fill.
+      bbox: { x: 0.045, y: 0.353, w: 0.42, h: 0.165 },
       placeholder:
         "$10.00    WEEKDAY RATE\n$5.00     NIGHTS\n$5.00     WEEKENDS",
       style: {
         color: C.ink,
         bgColor: C.white,
         fontWeight: 500,
-        fontSize: 0.022,
-        align: "left",
-        valign: "center",
-        lineHeight: 1.55,
-      },
-    },
-    {
-      id: "instructionsContent",
-      label: "Payment instructions",
-      type: "body",
-      bbox: { x: 0.52, y: 0.385, w: 0.42, h: 0.10 },
-      placeholder:
-        "PAY BY PHONE BY SCANNING THE QR CODE LOCATED THROUGHOUT THE FACILITY. NO FREE PARKING ANYTIME. DO NOT PAY ATTENDANT. NO IN & OUT.",
-      style: {
-        color: C.ink,
-        bgColor: C.white,
-        fontWeight: 500,
-        fontSize: 0.022,
-        align: "center",
-        valign: "center",
-        lineHeight: 1.35,
-      },
-    },
-    // Row 3 — liability split into its two visible sub-sections so the
-    // "CONTACT PARKWELL:" subheader stays as part of the PNG.
-    {
-      id: "liabilityContent",
-      label: "Limit of liability paragraph",
-      type: "body",
-      bbox: { x: 0.06, y: 0.61, w: 0.42, h: 0.175 },
-      placeholder:
-        "LOCK YOUR CAR AND STORE VALUABLES OUT OF SIGHT. CHARGE IS FOR PARKING SPACES ONLY. PARKWELL AND ITS AFFILIATES NOT RESPONSIBLE FOR THEFT, FIRE, DAMAGE OR INJURY TO ANY PERSON OR PROPERTY.",
-      style: {
-        color: C.ink,
-        bgColor: C.white,
-        fontWeight: 500,
         fontSize: 0.02,
         align: "center",
-        valign: "top",
+        valign: "center",
         lineHeight: 1.4,
-      },
-    },
-    {
-      id: "contactContent",
-      label: "Contact Parkwell info",
-      type: "body",
-      bbox: { x: 0.06, y: 0.835, w: 0.42, h: 0.13 },
-      placeholder:
-        "720-504-3620\n2546 15th St, DENVER CO 80211\nccnparking@goparkwell.com\nWWW.GOPARKWELL.COM",
-      style: {
-        color: C.ink,
-        bgColor: C.white,
-        fontWeight: 500,
-        fontSize: 0.02,
-        align: "center",
-        valign: "top",
-        lineHeight: 1.45,
       },
     },
     {
       id: "violationsContent",
       label: "Violations content",
       type: "body",
-      bbox: { x: 0.52, y: 0.61, w: 0.42, h: 0.355 },
+      // Top edge sits just under the "VIOLATIONS:" underline so the canonical
+      // first line can't peek above the bg-fill.
+      bbox: { x: 0.515, y: 0.553, w: 0.44, h: 0.40 },
       placeholder:
         "PAID PARKING IS STRICTLY ENFORCED 24/7. NOTICES/FINES ARE ISSUED FOR NON-PAYMENT, EXCEEDING ALLOTTED TIME, OR PARKING IN UNAUTHORIZED SPACES. WE RESERVE THE RIGHT TO TOW FOR UNAUTHORIZED PARKING. FEES & ESCALATIONS: $45 IF PAID WITHIN 14 DAYS, $95 IF PAID AFTER. TO DISPUTE A VIOLATION, EMAIL NOTICES@GOPARKWELL.COM",
       style: {

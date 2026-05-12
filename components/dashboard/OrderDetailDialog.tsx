@@ -178,8 +178,10 @@ export function OrderDetailDialog({
   };
 
   const editSign = () => {
+    // Don't call onOpenChange — its parent does a router.replace back to
+    // /dashboard/orders, which races with this push and cancels the
+    // navigation. The dialog unmounts as soon as the route changes.
     router.push(`/create?template=${order.templateId}&order=${order.id}`);
-    onOpenChange(false);
   };
 
   return (

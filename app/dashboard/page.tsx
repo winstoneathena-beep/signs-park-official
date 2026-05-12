@@ -7,12 +7,14 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { OrderDetailDialog } from "@/components/dashboard/OrderDetailDialog";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import { TEMPLATES_BY_ID } from "@/lib/sign-templates";
-import { useOrders, type Order, type OrderStatus } from "@/lib/orders";
+import { useOrders, useSession, type Order, type OrderStatus } from "@/lib/orders";
 import { userTag } from "@/lib/user-display";
 import { cn } from "@/lib/utils";
 
 export default function DashboardPage() {
   const orders = useOrders();
+  const { session } = useSession();
+  const isApprover = session.role === "approver";
   const [selected, setSelected] = useState<Order | null>(null);
 
   const counts = useMemo(() => {
@@ -42,7 +44,9 @@ export default function DashboardPage() {
           icon={Clock}
           label="Pending review"
           value={counts.pending}
-          href="/dashboard/orders?status=pending"
+          // Approver → straight into the action queue where they can edit /
+          // request revision / approve. Requester → filtered orders list.
+          href={isApprover ? "/dashboard/queue" : "/dashboard/orders?status=pending"}
           tone="yellow"
         />
         <StatTile

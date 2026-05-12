@@ -78,7 +78,6 @@ export const SignPreview = forwardRef<HTMLDivElement, Props>(function SignPrevie
           width={width}
           height={height}
           showZones={showZones}
-          forExport={forExport}
         />
       ))}
     </div>
@@ -93,14 +92,12 @@ function FieldOverlay({
   width,
   height,
   showZones,
-  forExport,
 }: {
   field: EditableField;
   value: string | string[] | RateRow[] | undefined;
   width: number;
   height: number;
   showZones: boolean;
-  forExport: boolean;
 }) {
   const { bbox, style, type } = field;
   const px = {
@@ -112,10 +109,7 @@ function FieldOverlay({
   const fontSize = style.fontSize * height;
   const outline = showZones ? "1px dashed rgba(255,255,255,0.6)" : undefined;
 
-  /* Decide whether to render an overlay at all. Empty fields render nothing —
-     the underlying PNG (which has the brand-guide canonical content) shows
-     through. Only when the user has typed/uploaded do we render the overlay
-     with bg fill that masks the PNG. */
+  /* Has the user typed/uploaded anything for this field? */
   const hasValue = (() => {
     if (type === "qr-image") return typeof value === "string" && value.length > 0;
     if (type === "rate-table")
@@ -134,26 +128,12 @@ function FieldOverlay({
     return typeof value === "string" && value.length > 0;
   })();
 
-  if (!hasValue) {
-    // Show a thin outline in editor mode (showZones=true on step 1) so the
-    // user knows where the editable region sits, without painting over PNG.
-    return showZones && !forExport ? (
-      <div
-        style={{
-          position: "absolute",
-          ...px,
-          outline: "1px dashed rgba(255,255,255,0.45)",
-          outlineOffset: "-1px",
-          pointerEvents: "none",
-        }}
-        aria-hidden
-      />
-    ) : null;
-  }
-
-  /* QR image — uploaded; replace the PNG placeholder with the user's image. */
+  /* QR is special — the placeholder is an image baked into the PNG, not text.
+     Empty = let the PNG QR show through. Uploaded = our overlay. */
   if (type === "qr-image") {
+    if (!hasValue) return null;
     const src = value as string;
+    const padPct = 4;
     return (
       <div
         style={{
@@ -161,10 +141,11 @@ function FieldOverlay({
           ...px,
           background: style.bgColor,
           outline,
-          padding: "2%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          // Pad inside the bbox so the uploaded image doesn't touch the edges.
+          // Using px values keeps it consistent regardless of bbox aspect.
+          padding: `${(px.height * padPct) / 100}px ${(px.width * padPct) / 100}px`,
+          boxSizing: "border-box",
+          overflow: "hidden",
           zIndex: 10,
         }}
       >
@@ -173,8 +154,11 @@ function FieldOverlay({
           src={src}
           alt="QR code"
           style={{
-            maxWidth: "100%",
-            maxHeight: "100%",
+            display: "block",
+            width: "100%",
+            height: "100%",
+            // contain → preserve aspect ratio; the image scales DOWN (or up)
+            // to fit the bbox no matter what dimensions the user uploaded.
             objectFit: "contain",
           }}
           draggable={false}
@@ -183,12 +167,10 @@ function FieldOverlay({
     );
   }
 
-  /* Rate table */
+  /* Rate table — empty = let the PNG rate table show through. */
   if (type === "rate-table") {
-    const rows: RateRow[] =
-      Array.isArray(value) && value.length > 0 && typeof value[0] === "object"
-        ? (value as RateRow[])
-        : DEFAULT_RATE_ROWS;
+    if (!hasValue) return null;
+    const rows = value as RateRow[];
     return (
       <div
         style={{
@@ -212,14 +194,15 @@ function FieldOverlay({
     );
   }
 
-  /* List with bullets */
+  /* List — empty = let the PNG list show through. */
   if (type === "list") {
-    const list = (value as string[]).filter(
+    if (!hasValue) return null;
+    const items = (value as string[]).filter(
       (v) => typeof v === "string" && v.length > 0,
     );
     return (
       <ListOverlay
-        items={list}
+        items={items}
         px={px}
         baseFontSize={fontSize}
         style={style}
@@ -228,10 +211,10 @@ function FieldOverlay({
     );
   }
 
-  /* Vertical word stack — Delineator */
+  /* Vertical word stack — Delineator. Empty = PNG shows through. */
   if (field.id === "directionWord") {
-    const text = (value as string).toUpperCase();
-    const letters = text.split("");
+    if (!hasValue) return null;
+    const letters = (value as string).toUpperCase().split("");
     return (
       <div
         style={{
@@ -261,16 +244,18 @@ function FieldOverlay({
     );
   }
 
-  /* Default: text / headline / body — only reached when hasValue is true. */
-  const text = value as string;
+  /* Default: text / headline / body. Empty = PNG shows through. */
+  if (!hasValue) return null;
 
+  const isBody = type === "body" || type === "messaging";
   return (
     <TextOverlay
-      text={text}
+      text={value as string}
       px={px}
       baseFontSize={fontSize}
       style={style}
       outline={outline}
+      wrap={isBody}
     />
   );
 }
@@ -291,12 +276,18 @@ function TextOverlay({
   baseFontSize,
   style,
   outline,
+  opacity = 1,
+  wrap = false,
 }: {
   text: string;
   px: { left: number; top: number; width: number; height: number };
   baseFontSize: number;
   style: EditableField["style"];
   outline?: string;
+  opacity?: number;
+  /** Paragraph wrap mode: pre-wrap with maxWidth so long lines reflow inside
+   *  the bbox. Use for body/paragraph fields. Headlines stay nowrap (pre). */
+  wrap?: boolean;
 }) {
   const innerRef = useRef<HTMLDivElement>(null);
 
@@ -312,10 +303,11 @@ function TextOverlay({
     if (naturalW > 0 && naturalH > 0) {
       const availW = px.width * 0.94;
       const availH = px.height * 0.92;
-      const scale = Math.max(
-        0.4,
-        Math.min(1, availW / naturalW, availH / naturalH),
-      );
+      // No artificial floor — letting text shrink as much as needed is the
+      // only way to guarantee it stays inside the bbox for very long content
+      // (Sign #12 cells, long paragraphs). Tiny text is still better than
+      // text overflowing into a neighbouring cell.
+      const scale = Math.min(1, availW / naturalW, availH / naturalH);
       el.style.transform = `scale(${scale})`;
     }
     // Re-runs whenever any of these change.
@@ -369,8 +361,12 @@ function TextOverlay({
           textTransform: style.transform ?? "none",
           fontStyle: style.italic ? "italic" : "normal",
           textAlign: align,
-          whiteSpace: "pre",
+          // Body wraps inside the bbox (pre-wrap + maxWidth). Headlines keep
+          // explicit line breaks but never split inside a word (pre, no max).
+          whiteSpace: wrap ? "pre-wrap" : "pre",
+          ...(wrap ? { maxWidth: px.width * 0.94 } : {}),
           transformOrigin,
+          opacity,
         }}
       >
         {text}
@@ -390,12 +386,14 @@ function ListOverlay({
   baseFontSize,
   style,
   outline,
+  opacity = 1,
 }: {
   items: string[];
   px: { left: number; top: number; width: number; height: number };
   baseFontSize: number;
   style: EditableField["style"];
   outline?: string;
+  opacity?: number;
 }) {
   const innerRef = useRef<HTMLDivElement>(null);
 
@@ -462,26 +460,38 @@ function ListOverlay({
           textAlign: align,
           textTransform: style.transform ?? "none",
           fontStyle: style.italic ? "italic" : "normal",
-          whiteSpace: "pre",
+          // Long bullet items must wrap so the natural width stays bounded
+          // (otherwise shrink-to-fit floors at 40% and items render tiny).
+          whiteSpace: "normal",
+          wordBreak: "break-word",
+          width: px.width * 0.94,
           transformOrigin,
-          display: "inline-block",
+          opacity,
         }}
       >
         {items.map((item, i) => (
-          <div key={i} style={{ whiteSpace: "pre", lineHeight: "inherit" }}>
+          <div
+            key={i}
+            style={{
+              lineHeight: "inherit",
+              display: "flex",
+              alignItems: "baseline",
+              gap: `${baseFontSize * 0.4}px`,
+              marginBottom: `${baseFontSize * 0.15}px`,
+            }}
+          >
             <span
               aria-hidden
               style={{
-                display: "inline-block",
+                flex: "0 0 auto",
                 opacity: 0.95,
-                marginRight: `${baseFontSize * 0.4}px`,
                 minWidth:
                   style.bulletStyle === "1." ? `${baseFontSize * 1.1}px` : "auto",
               }}
             >
               {bulletMarker(style.bulletStyle, i)}
             </span>
-            <span>{item || " "}</span>
+            <span style={{ flex: 1, minWidth: 0 }}>{item || " "}</span>
           </div>
         ))}
       </div>
