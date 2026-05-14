@@ -4,22 +4,12 @@ import { ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/site/PageHeader";
 import {
   CATEGORY_LABELS,
-  SIGN_TEMPLATES,
   templatesByCategory,
   type SignCategory,
   type SignTemplate,
 } from "@/lib/sign-templates";
 
 export const metadata = { title: "Sign Library" };
-
-function spellNumber(n: number): string {
-  const words = [
-    "zero", "one", "two", "three", "four", "five", "six", "seven",
-    "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
-    "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
-  ];
-  return words[n] ?? String(n);
-}
 
 export default function TemplatesPage() {
   const groups = templatesByCategory();
@@ -30,14 +20,11 @@ export default function TemplatesPage() {
     "reserved",
     "informational",
   ];
-  const total = SIGN_TEMPLATES.length;
-  const totalLabel = `${spellNumber(total).replace(/^./, (c) => c.toUpperCase())} templates`;
-
   return (
     <>
       <PageHeader
         eyebrow="Sign library"
-        title={`${totalLabel}. Every Parkwell scenario.`}
+        title="Approved templates. Every Parkwell scenario."
         description="Drawn at print resolution from the brand guide. Pick one to start a new sign order — or browse to see what's available."
       />
 
