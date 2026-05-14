@@ -19,8 +19,10 @@ export type Order = {
     material: string;
     notes?: string;
   };
-  /** Location label (free-form) for filter/search. */
+  /** Location label (free-form) for filter/search. Required at order time. */
   location: string;
+  /** Site number — required at order time for expense coding / billing. */
+  siteNumber: string;
   /** Manager who created the order. */
   createdBy: { name: string; email: string; role: Role };
   createdAt: number;
@@ -73,6 +75,7 @@ const SAMPLE_ORDERS: Order[] = [
     },
     specs: { widthIn: 24, heightIn: 36, quantity: 4, material: "Aluminium" },
     location: "250 Columbine — Denver",
+    siteNumber: "PW-0250",
     createdBy: { name: "Andre Gurule", email: "andre@goparkwell.com", role: "requester" },
     createdAt: Date.now() - 1000 * 60 * 60 * 26,
     updatedAt: Date.now() - 1000 * 60 * 60 * 4,
@@ -84,6 +87,7 @@ const SAMPLE_ORDERS: Order[] = [
     values: { locationName: "RIVERVIEW PLAZA" },
     specs: { widthIn: 24, heightIn: 36, quantity: 2, material: "Coroplast" },
     location: "Riverview Plaza — Boulder",
+    siteNumber: "PW-1108",
     createdBy: { name: "Shannon Snow", email: "shannon@goparkwell.com", role: "requester" },
     createdAt: Date.now() - 1000 * 60 * 60 * 80,
     updatedAt: Date.now() - 1000 * 60 * 60 * 12,
@@ -100,6 +104,7 @@ const SAMPLE_ORDERS: Order[] = [
     values: {},
     specs: { widthIn: 18, heightIn: 27, quantity: 6, material: "Vinyl" },
     location: "Sunset Row — Los Angeles",
+    siteNumber: "PW-2204",
     createdBy: { name: "Travis Bruce", email: "travis@goparkwell.com", role: "requester" },
     createdAt: Date.now() - 1000 * 60 * 60 * 24 * 6,
     updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 2,
@@ -115,6 +120,7 @@ const SAMPLE_ORDERS: Order[] = [
     values: { propertyName: "LIMELIGHT" },
     specs: { widthIn: 18, heightIn: 24, quantity: 2, material: "Dibond" },
     location: "Limelight — Denver",
+    siteNumber: "PW-0473",
     createdBy: { name: "Roman Khaimov", email: "roman@goparkwell.com", role: "requester" },
     createdAt: Date.now() - 1000 * 60 * 60 * 24 * 8,
     updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 1.5,
@@ -130,6 +136,7 @@ const SAMPLE_ORDERS: Order[] = [
     values: {},
     specs: { widthIn: 18, heightIn: 24, quantity: 12, material: "Aluminium" },
     location: "Multi-site — Denver Metro",
+    siteNumber: "PW-MULTI",
     createdBy: { name: "Ryan Whitehurst", email: "ryan@goparkwell.com", role: "requester" },
     createdAt: Date.now() - 1000 * 60 * 60 * 24 * 12,
     updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 9,
@@ -160,7 +167,12 @@ function readOrders(): Order[] {
     }
     if (raw === ordersRawCache) return ordersCache;
     ordersRawCache = raw;
-    ordersCache = JSON.parse(raw) as Order[];
+    // Backfill `siteNumber` on orders saved before that field existed —
+    // otherwise the dashboard renders `undefined` and the dialog crashes.
+    ordersCache = (JSON.parse(raw) as Order[]).map((o) => ({
+      ...o,
+      siteNumber: o.siteNumber ?? "",
+    }));
     return ordersCache;
   } catch {
     return ordersCache;

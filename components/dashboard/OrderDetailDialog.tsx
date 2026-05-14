@@ -127,6 +127,7 @@ export function OrderDetailDialog({
       ["Order ID", order.id],
       ["Template", tpl ? `${tpl.number} — ${tpl.name}` : order.templateId],
       ["Location", order.location || "—"],
+      ["Site #", order.siteNumber || "—"],
       ["Dimensions", `${order.specs.widthIn}" W × ${order.specs.heightIn}" H`],
       ["Quantity", String(order.specs.quantity)],
       ["Material", order.specs.material],
@@ -291,6 +292,7 @@ export function OrderDetailDialog({
               <Section title="Specs">
                 <dl className="grid grid-cols-2 gap-y-2.5 text-sm">
                   <Row label="Location" value={order.location || "—"} />
+                  <Row label="Site #" value={order.siteNumber || "—"} />
                   <Row label="Manager" value={order.createdBy.name} />
                   <Row
                     label="Dimensions"

@@ -118,6 +118,7 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
     notes: editingOrder?.specs.notes ?? "",
   });
   const [location, setLocation] = useState(editingOrder?.location ?? "");
+  const [siteNumber, setSiteNumber] = useState(editingOrder?.siteNumber ?? "");
   const [step, setStep] = useState<Step>("content");
   const [submittedOrderId, setSubmittedOrderId] = useState<string | null>(null);
 
@@ -211,6 +212,7 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
     const rows: [string, string][] = [
       ["Template", `${template.number} — ${template.name}`],
       ["Location", location || "—"],
+      ["Site #", siteNumber || "—"],
       ["Dimensions", `${size.widthIn}" W × ${size.heightIn}" H`],
       ["Quantity", String(specs.quantity)],
       ["Material", specs.material],
@@ -261,6 +263,7 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
         values,
         specs: commonSpecs,
         location: location || editingOrder.location,
+        siteNumber: siteNumber || editingOrder.siteNumber,
         updatedAt: Date.now(),
       });
       // Keep the editingOrder reference fresh for subsequent saves on the same screen.
@@ -271,6 +274,7 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
         values,
         specs: commonSpecs,
         location: location || editingOrder.location,
+        siteNumber: siteNumber || editingOrder.siteNumber,
         updatedAt: Date.now(),
       });
     } else {
@@ -285,6 +289,7 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
         values,
         specs: commonSpecs,
         location: location.trim(),
+        siteNumber: siteNumber.trim(),
         createdBy: session,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -416,9 +421,11 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
               size={size}
               specs={specs}
               location={location}
+              siteNumber={siteNumber}
               onSize={setSize}
               onSpecs={setSpecs}
               onLocation={setLocation}
+              onSiteNumber={setSiteNumber}
               onBack={() => goToStep("content")}
               onNext={() => goToStep("review")}
             />
@@ -429,6 +436,7 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
               size={size}
               specs={specs}
               location={location}
+              siteNumber={siteNumber}
               onBack={() => goToStep("specs")}
               onSaveDraft={() => submit("draft")}
               onSubmit={() => {
@@ -1039,9 +1047,11 @@ function SpecsStep({
   size,
   specs,
   location,
+  siteNumber,
   onSize,
   onSpecs,
   onLocation,
+  onSiteNumber,
   onBack,
   onNext,
 }: {
@@ -1049,24 +1059,87 @@ function SpecsStep({
   size: SignSize;
   specs: { quantity: number; material: string; notes: string };
   location: string;
+  siteNumber: string;
   onSize: (s: SignSize) => void;
   onSpecs: (s: typeof specs) => void;
   onLocation: (s: string) => void;
+  onSiteNumber: (s: string) => void;
   onBack: () => void;
   onNext: () => void;
 }) {
   const sizeKey = `${size.widthIn}x${size.heightIn}`;
   const sq = isSquare(template);
 
+  // Both fields are required for billing / expense coding — gate the Next
+  // button and show inline validation on touched-but-empty inputs.
+  const [touched, setTouched] = useState<{ location: boolean; site: boolean }>(
+    { location: false, site: false },
+  );
+  const locationMissing = !location.trim();
+  const siteMissing = !siteNumber.trim();
+  const canContinue = !locationMissing && !siteMissing;
+  const tryNext = () => {
+    if (!canContinue) {
+      setTouched({ location: true, site: true });
+      return;
+    }
+    onNext();
+  };
+
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader title="3. Location" subtitle="Where will this sign live?" />
-        <Input
-          placeholder="e.g. 250 Columbine — Denver, CO"
-          value={location}
-          onChange={(e) => onLocation(e.target.value)}
+        <CardHeader
+          title="3. Location & Site #"
+          subtitle="Both are required — used for delivery and to code the expense."
         />
+        <div className="space-y-3">
+          <div>
+            <Label className="mb-1.5 block">
+              Location name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              placeholder="e.g. 250 Columbine — Denver, CO"
+              value={location}
+              aria-invalid={touched.location && locationMissing}
+              onBlur={() => setTouched((t) => ({ ...t, location: true }))}
+              onChange={(e) => onLocation(e.target.value)}
+              className={
+                touched.location && locationMissing
+                  ? "border-destructive focus-visible:ring-destructive"
+                  : undefined
+              }
+            />
+            {touched.location && locationMissing && (
+              <p className="mt-1.5 text-xs text-destructive">
+                Location name is required.
+              </p>
+            )}
+          </div>
+          <div>
+            <Label className="mb-1.5 block">
+              Site # <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              placeholder="e.g. PW-0250"
+              value={siteNumber}
+              aria-invalid={touched.site && siteMissing}
+              onBlur={() => setTouched((t) => ({ ...t, site: true }))}
+              onChange={(e) => onSiteNumber(e.target.value)}
+              className={
+                touched.site && siteMissing
+                  ? "border-destructive focus-visible:ring-destructive"
+                  : undefined
+              }
+            />
+            {touched.site && siteMissing && (
+              <p className="mt-1.5 text-xs text-destructive">
+                Site # is required so the order can be coded to the right
+                expense.
+              </p>
+            )}
+          </div>
+        </div>
       </Card>
 
       <Card>
@@ -1148,16 +1221,24 @@ function SpecsStep({
         </div>
       </Card>
 
-      <div className="flex justify-between">
+      <div className="flex flex-col items-end gap-2 sm:flex-row sm:justify-between">
         <Button onClick={onBack} variant="outline" className="h-12 rounded-full px-7">
           Back
         </Button>
-        <Button
-          onClick={onNext}
-          className="h-12 rounded-full bg-parkwell-blue text-white hover:bg-parkwell-blue/90 px-8"
-        >
-          Review & download
-        </Button>
+        <div className="flex flex-col items-end gap-1.5">
+          <Button
+            onClick={tryNext}
+            disabled={!canContinue}
+            className="h-12 rounded-full bg-parkwell-blue text-white hover:bg-parkwell-blue/90 disabled:opacity-50 disabled:cursor-not-allowed px-8"
+          >
+            Review & download
+          </Button>
+          {!canContinue && (
+            <p className="text-xs text-muted-foreground">
+              Fill in Location and Site # to continue.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1170,6 +1251,7 @@ function ReviewStep({
   size,
   specs,
   location,
+  siteNumber,
   onBack,
   onSaveDraft,
   onSubmit,
@@ -1185,6 +1267,7 @@ function ReviewStep({
   size: SignSize;
   specs: { quantity: number; material: string; notes: string };
   location: string;
+  siteNumber: string;
   onBack: () => void;
   onSaveDraft: () => void;
   onSubmit: () => void;
@@ -1203,6 +1286,7 @@ function ReviewStep({
         <dl className="grid grid-cols-2 gap-y-3 text-sm">
           <Row label="Template" value={`${template.number} — ${template.name}`} />
           <Row label="Location" value={location || "—"} />
+          <Row label="Site #" value={siteNumber || "—"} />
           <Row label="Dimensions" value={`${size.widthIn}" × ${size.heightIn}"`} />
           <Row label="Quantity" value={String(specs.quantity)} />
           <Row label="Material" value={specs.material} />
