@@ -2,6 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import type { FieldValues } from "@/components/sign/SignPreview";
+import { isApprover } from "./approvers";
 
 export type OrderStatus = "draft" | "pending" | "approved" | "ordered" | "rejected";
 
@@ -198,7 +199,17 @@ function readSession(): Session {
     }
     if (raw === sessionRawCache) return sessionCache;
     sessionRawCache = raw;
-    sessionCache = JSON.parse(raw) as Session;
+    const parsed = JSON.parse(raw) as Session;
+    // Silent downgrade: a localStorage record claiming approver access
+    // gets demoted to requester if the email isn't on the allowlist.
+    // Defense against pre-allowlist saves AND hand-edits via DevTools.
+    // We intentionally don't writeSession() back — that would loop
+    // through useSyncExternalStore. Reads stay normalised; the next
+    // writeSession (sign-in, setRole) will persist the corrected value.
+    if (parsed.role === "approver" && !isApprover(parsed.email)) {
+      parsed.role = "requester";
+    }
+    sessionCache = parsed;
     return sessionCache;
   } catch {
     return sessionCache;
@@ -242,7 +253,16 @@ export function useSession(): {
   const session = useSyncExternalStore(subscribe, readSession, () => DEFAULT_SESSION);
   return {
     session,
-    setRole: (role) => writeSession({ ...readSession(), role }),
+    setRole: (role) => {
+      const current = readSession();
+      // Block role=approver if the email isn't on the allowlist. This is
+      // the guard for the dashboard RoleSwitcher. The UI already hides
+      // the switcher for non-listed users; this is the second line of
+      // defense against direct callers or future race conditions.
+      const safeRole: Role =
+        role === "approver" && !isApprover(current.email) ? "requester" : role;
+      writeSession({ ...current, role: safeRole });
+    },
     setSession: writeSession,
   };
 }

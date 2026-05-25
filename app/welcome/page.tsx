@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { signIn, useSession, type Role } from "@/lib/orders";
+import { isApprover, isParkwellDomain } from "@/lib/approvers";
 import { cn } from "@/lib/utils";
 
 const ROLES: {
@@ -77,7 +78,12 @@ export default function WelcomePage() {
   const trimmedName = name.trim();
   const trimmedEmail = email.trim();
   const nameOk = trimmedName.length >= 2;
-  const emailOk = EMAIL_RE.test(trimmedEmail);
+  const emailShapeOk = EMAIL_RE.test(trimmedEmail);
+  const domainOk = isParkwellDomain(trimmedEmail);
+  const emailOk = emailShapeOk && domainOk;
+  // Approver access requires the email to be on the allowlist.
+  // Requester is the default for any valid @goparkwell.com email.
+  const approverEligible = emailOk && isApprover(trimmedEmail);
   const canProceed = nameOk && emailOk;
 
   const pick = (role: Role) => {
@@ -85,7 +91,11 @@ export default function WelcomePage() {
       setAttempted(true);
       return;
     }
-    signIn({ name: trimmedName, email: trimmedEmail, role });
+    // Hard guard: an Approver pick from a non-listed email gets silently
+    // demoted. UI already hides the chip, but this is the seatbelt.
+    const safeRole: Role =
+      role === "approver" && !approverEligible ? "requester" : role;
+    signIn({ name: trimmedName, email: trimmedEmail, role: safeRole });
     router.replace("/");
   };
 
@@ -161,7 +171,11 @@ export default function WelcomePage() {
               value={email}
               onChange={setEmail}
               showError={attempted && !emailOk}
-              errorText="Please enter a valid work email."
+              errorText={
+                !emailShapeOk
+                  ? "Please enter a valid work email."
+                  : "Use your @goparkwell.com email — this site is internal to Parkwell."
+              }
               type="email"
               autoComplete="email"
             />
@@ -178,7 +192,15 @@ export default function WelcomePage() {
         </motion.div>
 
         <div className="mt-4 grid gap-5 md:grid-cols-2">
-          {ROLES.map((r, i) => {
+          {ROLES.filter(
+            (r) =>
+              // Hide Approver entirely unless the email is on the allowlist.
+              // We still render the Approver card BEFORE the user types
+              // anything (canProceed=false) — that's the discovery state.
+              // Only once a valid email is typed AND it isn't on the list
+              // do we suppress the chip.
+              r.id !== "approver" || !emailOk || approverEligible,
+          ).map((r, i) => {
             const disabled = !canProceed;
             return (
               <motion.button
@@ -269,6 +291,17 @@ export default function WelcomePage() {
             className="mt-6 text-sm text-parkwell-red text-center"
           >
             Fill in your name and a valid work email before picking a role.
+          </motion.p>
+        )}
+
+        {emailOk && !approverEligible && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-6 text-center text-xs text-white/50"
+          >
+            Approver access is granted by an administrator. If you need
+            approval rights, ask your manager.
           </motion.p>
         )}
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { LayoutDashboard, Files, ShieldCheck, Library, Plus, LogOut } from "lucide-react";
 import { useSession, signOut } from "@/lib/orders";
+import { isApprover } from "@/lib/approvers";
 import { roleAbbrev } from "@/lib/user-display";
 import { RoleSwitcher } from "./RoleSwitcher";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { session } = useSession();
   const pathname = usePathname();
   const router = useRouter();
+
+  // Role switching + the "Switch role" sign-out chip only render for users
+  // on the approver allowlist. For everyone else there's nothing to switch
+  // to — they're Requesters, full stop.
+  const canSwitchRole = isApprover(session.email);
 
   const onSignOut = () => {
     signOut();
@@ -44,19 +50,24 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <RoleSwitcher />
+          {canSwitchRole && <RoleSwitcher />}
           <Link
             href="/create"
             className="inline-flex h-10 items-center justify-center rounded-full bg-parkwell-blue px-5 text-sm font-semibold text-white hover:bg-parkwell-blue/90 transition-colors"
           >
             <Plus className="h-4 w-4 mr-1" /> New sign
           </Link>
+          {/* Sign-out path stays for EVERYONE — without it a non-approver
+              has no way to clear their session. Just rebrand the label:
+              approvers see "Switch role" (they're meant to bounce back to
+              /welcome and pick again); requesters see "Sign out". */}
           <button
             type="button"
             onClick={onSignOut}
             className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-background px-4 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
-            <LogOut className="h-4 w-4 mr-1.5" /> Switch role
+            <LogOut className="h-4 w-4 mr-1.5" />
+            {canSwitchRole ? "Switch role" : "Sign out"}
           </button>
         </div>
       </div>

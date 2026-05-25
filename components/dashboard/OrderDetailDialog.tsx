@@ -23,6 +23,7 @@ import { jsPDF } from "jspdf";
 import { useRouter } from "next/navigation";
 import { TEMPLATES_BY_ID } from "@/lib/sign-templates";
 import { saveOrder, useOrders, useSession, type Order } from "@/lib/orders";
+import { isApprover as isOnApproverList } from "@/lib/approvers";
 import { SignPreview } from "@/components/sign/SignPreview";
 import { userTag } from "@/lib/user-display";
 import { cn } from "@/lib/utils";
@@ -58,8 +59,15 @@ export function OrderDetailDialog({
   if (!order) return null;
   const tpl = TEMPLATES_BY_ID[order.templateId];
 
-  const isApprover = session.role === "approver";
+  // Approval rights = (a) currently in approver mode AND (b) email on the
+  // allowlist AND (c) not approving your own order. Self-approval is
+  // blocked as a segregation-of-duties guard — every order needs a second
+  // pair of eyes regardless of seniority.
   const isCreator = order.createdBy.email === session.email;
+  const isApprover =
+    session.role === "approver" &&
+    isOnApproverList(session.email) &&
+    !isCreator;
   const canApprove = isApprover && order.status === "pending";
   const canMarkOrdered = isApprover && order.status === "approved";
   // Creator can fix their own draft or rejected (revision-requested) orders.
