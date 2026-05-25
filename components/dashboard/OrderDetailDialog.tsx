@@ -17,13 +17,24 @@ import {
   Truck,
   FileText,
   Loader2,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
 import { useRouter } from "next/navigation";
 import { TEMPLATES_BY_ID } from "@/lib/sign-templates";
-import { saveOrder, useOrders, useSession, type Order } from "@/lib/orders";
-import { isApprover as isOnApproverList } from "@/lib/approvers";
+import {
+  deleteOrder,
+  saveOrder,
+  useOrders,
+  useSession,
+  type Order,
+} from "@/lib/orders";
+import {
+  isAdmin,
+  isApprover as isOnApproverList,
+} from "@/lib/approvers";
 import { SignPreview } from "@/components/sign/SignPreview";
 import { userTag } from "@/lib/user-display";
 import { cn } from "@/lib/utils";
@@ -53,6 +64,7 @@ export function OrderDetailDialog({
   const [revisionError, setRevisionError] = useState(false);
   const [pngPending, setPngPending] = useState(false);
   const [pdfPending, setPdfPending] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const revisionRef = useRef<HTMLTextAreaElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
@@ -75,7 +87,23 @@ export function OrderDetailDialog({
   // it's under review. Approved + ordered are permanently locked.
   const canCreatorEdit =
     isCreator && (order.status === "draft" || order.status === "rejected");
-  const hasActionFooter = canApprove || canMarkOrdered || canCreatorEdit;
+  // Delete = (creator OR admin) AND not already shipped to vendor.
+  // "ordered" status reflects a real vendor commitment / paid invoice —
+  // deleting it would make audits lie, so it's hard-blocked.
+  const canDelete =
+    (isCreator || isAdmin(session.email)) && order.status !== "ordered";
+  const hasActionFooter =
+    canApprove || canMarkOrdered || canCreatorEdit || canDelete;
+
+  const confirmDelete = () => {
+    if (!canDelete) return;
+    deleteOrder(order.id);
+    setDeleteConfirmOpen(false);
+    // Drop the ?id=... query string so a fresh dashboard load doesn't
+    // re-open a now-missing order.
+    router.replace("/dashboard/orders");
+    onOpenChange(false);
+  };
 
   const downloadPng = async () => {
     if (!exportRef.current || pngPending || pdfPending) return;
@@ -407,6 +435,19 @@ export function OrderDetailDialog({
         {/* ============ Sticky action footer ============ */}
         {hasActionFooter && (
           <footer className="border-t border-border bg-background px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            {/* Delete affordance lives on the LEFT of the footer for every
+                eligible viewer. Quiet ghost styling so it doesn't compete
+                with the primary action on the right. */}
+            {canDelete && (
+              <Button
+                variant="ghost"
+                onClick={() => setDeleteConfirmOpen(true)}
+                className="h-10 rounded-full px-4 text-parkwell-red hover:bg-parkwell-red/10 hover:text-parkwell-red self-start sm:self-auto"
+              >
+                <Trash2 className="h-4 w-4 mr-1.5" />
+                Delete
+              </Button>
+            )}
             {canApprove ? (
               <>
                 <p className="text-xs text-muted-foreground">
@@ -453,7 +494,7 @@ export function OrderDetailDialog({
                   {order.status === "rejected" ? "Edit & Resubmit" : "Edit Sign"}
                 </Button>
               </>
-            ) : (
+            ) : canMarkOrdered ? (
               <>
                 <p className="text-xs text-muted-foreground">
                   Approved by{" "}
@@ -470,9 +511,62 @@ export function OrderDetailDialog({
                   Mark as ordered
                 </Button>
               </>
-            )}
+            ) : null}
           </footer>
         )}
+
+        {/* ============ Delete confirmation modal ============ */}
+        <Dialog
+          open={deleteConfirmOpen}
+          onOpenChange={setDeleteConfirmOpen}
+        >
+          <DialogContent className="max-w-md p-0 overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-start gap-3">
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-parkwell-red/10 text-parkwell-red shrink-0">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <DialogTitle className="text-lg font-semibold">
+                    Delete this order?
+                  </DialogTitle>
+                  <DialogDescription className="mt-2 text-sm text-muted-foreground">
+                    <span className="font-mono font-semibold text-foreground">
+                      {order.id}
+                    </span>{" "}
+                    — {tpl?.name ?? order.templateId}, status{" "}
+                    <span className="capitalize text-foreground">
+                      {order.status}
+                    </span>
+                    . This permanently removes the order from the system.
+                  </DialogDescription>
+                  {order.status === "approved" && (
+                    <p className="mt-3 rounded-lg border border-parkwell-red/30 bg-parkwell-red/5 px-3 py-2 text-xs text-parkwell-red">
+                      Heads up — this order was already approved. Make sure
+                      the vendor hasn&rsquo;t been notified before deleting.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-border bg-muted/30 px-6 py-4 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setDeleteConfirmOpen(false)}
+                className="h-10 rounded-full px-5"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmDelete}
+                className="h-10 rounded-full bg-parkwell-red text-white hover:bg-parkwell-red/90 px-5"
+              >
+                <Trash2 className="h-4 w-4 mr-1.5" />
+                Delete order
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );
