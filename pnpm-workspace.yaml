@@ -1,0 +1,20 @@
+# Postinstall/build-script allowlist. pnpm blocks dependency build scripts by
+# default as a supply-chain safeguard. Each entry below was verified 2026-07-02:
+# lockfile integrity hashes match the live npm registry, publishers are the
+# genuine long-standing maintainers (sharp/unrs-resolver published via GitHub
+# Actions OIDC trusted publishing), the scripts only prepare prebuilt native
+# binaries fetched from the official registry — no third-party endpoints, no
+# exfiltration. Independently cleared by the local bumblebee exposure scan.
+
+# Stock-pnpm keys (honored by CI / Vercel's vanilla pnpm):
+onlyBuiltDependencies:
+  - sharp # next image optimization — native libvips binary
+  - unrs-resolver # eslint-config-next import resolver — napi native binding
+ignoredBuiltDependencies:
+  - core-js # postinstall is only a funding/donation banner — no need to run it
+
+# Local hardened-pnpm gate (explicit per-package decision):
+allowBuilds:
+  core-js: false # funding banner only — refuse
+  sharp: true # verified — native libvips
+  unrs-resolver: true # verified — napi resolver binding
