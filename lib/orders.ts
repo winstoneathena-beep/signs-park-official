@@ -3,8 +3,10 @@
 import { useCallback, useSyncExternalStore } from "react";
 import type { FieldValues } from "@/components/sign/SignPreview";
 import { isApprover } from "./approvers";
+import { useAuth, supabaseSignOut } from "./auth";
 
-export type OrderStatus = "draft" | "pending" | "approved" | "ordered" | "rejected";
+export type OrderStatus =
+  "draft" | "pending" | "approved" | "ordered" | "rejected";
 
 export type Order = {
   id: string;
@@ -40,8 +42,8 @@ export type Order = {
 export type Role = "requester" | "approver";
 
 const ORDERS_KEY = "parkwell.orders.v1";
-const SESSION_KEY = "parkwell.session.v1";
-const ONBOARDED_KEY = "parkwell.onboarded.v1";
+/** Device-local UI preference only — identity comes from Supabase Auth. */
+const ROLE_KEY = "parkwell.role.v1";
 
 type Session = {
   name: string;
@@ -77,7 +79,11 @@ const SAMPLE_ORDERS: Order[] = [
     specs: { widthIn: 24, heightIn: 36, quantity: 4, material: "Aluminium" },
     location: "250 Columbine — Denver",
     siteNumber: "PW-0250",
-    createdBy: { name: "Andre Gurule", email: "andre@goparkwell.com", role: "requester" },
+    createdBy: {
+      name: "Andre Gurule",
+      email: "andre@goparkwell.com",
+      role: "requester",
+    },
     createdAt: Date.now() - 1000 * 60 * 60 * 26,
     updatedAt: Date.now() - 1000 * 60 * 60 * 4,
   },
@@ -89,7 +95,11 @@ const SAMPLE_ORDERS: Order[] = [
     specs: { widthIn: 24, heightIn: 36, quantity: 2, material: "Coroplast" },
     location: "Riverview Plaza — Boulder",
     siteNumber: "PW-1108",
-    createdBy: { name: "Shannon Snow", email: "shannon@goparkwell.com", role: "requester" },
+    createdBy: {
+      name: "Shannon Snow",
+      email: "shannon@goparkwell.com",
+      role: "requester",
+    },
     createdAt: Date.now() - 1000 * 60 * 60 * 80,
     updatedAt: Date.now() - 1000 * 60 * 60 * 12,
     approval: {
@@ -106,7 +116,11 @@ const SAMPLE_ORDERS: Order[] = [
     specs: { widthIn: 18, heightIn: 27, quantity: 6, material: "Vinyl" },
     location: "Sunset Row — Los Angeles",
     siteNumber: "PW-2204",
-    createdBy: { name: "Travis Bruce", email: "travis@goparkwell.com", role: "requester" },
+    createdBy: {
+      name: "Travis Bruce",
+      email: "travis@goparkwell.com",
+      role: "requester",
+    },
     createdAt: Date.now() - 1000 * 60 * 60 * 24 * 6,
     updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 2,
     approval: {
@@ -122,7 +136,11 @@ const SAMPLE_ORDERS: Order[] = [
     specs: { widthIn: 18, heightIn: 24, quantity: 2, material: "Dibond" },
     location: "Limelight — Denver",
     siteNumber: "PW-0473",
-    createdBy: { name: "Roman Khaimov", email: "roman@goparkwell.com", role: "requester" },
+    createdBy: {
+      name: "Roman Khaimov",
+      email: "roman@goparkwell.com",
+      role: "requester",
+    },
     createdAt: Date.now() - 1000 * 60 * 60 * 24 * 8,
     updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 1.5,
     approval: {
@@ -138,7 +156,11 @@ const SAMPLE_ORDERS: Order[] = [
     specs: { widthIn: 18, heightIn: 24, quantity: 12, material: "Aluminium" },
     location: "Multi-site — Denver Metro",
     siteNumber: "PW-MULTI",
-    createdBy: { name: "Ryan Whitehurst", email: "ryan@goparkwell.com", role: "requester" },
+    createdBy: {
+      name: "Ryan Whitehurst",
+      email: "ryan@goparkwell.com",
+      role: "requester",
+    },
     createdAt: Date.now() - 1000 * 60 * 60 * 24 * 12,
     updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 9,
     approval: {
@@ -155,8 +177,6 @@ const SAMPLE_ORDERS: Order[] = [
  */
 let ordersRawCache: string | null = null;
 let ordersCache: Order[] = SAMPLE_ORDERS;
-let sessionRawCache: string | null = null;
-let sessionCache: Session = DEFAULT_SESSION;
 
 function readOrders(): Order[] {
   if (typeof window === "undefined") return SAMPLE_ORDERS;
@@ -189,40 +209,29 @@ function writeOrders(orders: Order[]) {
   window.dispatchEvent(new Event("parkwell:orders"));
 }
 
-function readSession(): Session {
-  if (typeof window === "undefined") return DEFAULT_SESSION;
-  try {
-    let raw = window.localStorage.getItem(SESSION_KEY);
-    if (!raw) {
-      raw = JSON.stringify(DEFAULT_SESSION);
-      window.localStorage.setItem(SESSION_KEY, raw);
-    }
-    if (raw === sessionRawCache) return sessionCache;
-    sessionRawCache = raw;
-    const parsed = JSON.parse(raw) as Session;
-    // Silent downgrade: a localStorage record claiming approver access
-    // gets demoted to requester if the email isn't on the allowlist.
-    // Defense against pre-allowlist saves AND hand-edits via DevTools.
-    // We intentionally don't writeSession() back — that would loop
-    // through useSyncExternalStore. Reads stay normalised; the next
-    // writeSession (sign-in, setRole) will persist the corrected value.
-    if (parsed.role === "approver" && !isApprover(parsed.email)) {
-      parsed.role = "requester";
-    }
-    sessionCache = parsed;
-    return sessionCache;
-  } catch {
-    return sessionCache;
-  }
+function readRolePref(): Role {
+  if (typeof window === "undefined") return "requester";
+  return window.localStorage.getItem(ROLE_KEY) === "approver"
+    ? "approver"
+    : "requester";
 }
 
-function writeSession(s: Session) {
+export function setRolePref(role: Role) {
   if (typeof window === "undefined") return;
-  const raw = JSON.stringify(s);
-  window.localStorage.setItem(SESSION_KEY, raw);
-  sessionRawCache = raw;
-  sessionCache = s;
-  window.dispatchEvent(new Event("parkwell:session"));
+  window.localStorage.setItem(ROLE_KEY, role);
+  window.dispatchEvent(new Event("parkwell:role"));
+}
+
+function useRolePref(): Role {
+  const subscribe = useCallback((cb: () => void) => {
+    window.addEventListener("parkwell:role", cb);
+    window.addEventListener("storage", cb);
+    return () => {
+      window.removeEventListener("parkwell:role", cb);
+      window.removeEventListener("storage", cb);
+    };
+  }, []);
+  return useSyncExternalStore(subscribe, readRolePref, () => "requester");
 }
 
 export function useOrders(): Order[] {
@@ -237,34 +246,32 @@ export function useOrders(): Order[] {
   return useSyncExternalStore(subscribe, readOrders, () => SAMPLE_ORDERS);
 }
 
+/**
+ * Session = verified Supabase Auth identity + a device-local role
+ * preference. The effective role is re-derived on every render:
+ * `approver` only when the preference says so AND the verified email is
+ * on the allowlist — so a hand-edited localStorage role pref still
+ * renders as requester. `setRole` stores the raw preference; the
+ * derivation is the guard.
+ */
 export function useSession(): {
   session: Session;
   setRole: (role: Role) => void;
-  setSession: (s: Session) => void;
 } {
-  const subscribe = useCallback((cb: () => void) => {
-    window.addEventListener("parkwell:session", cb);
-    window.addEventListener("storage", cb);
-    return () => {
-      window.removeEventListener("parkwell:session", cb);
-      window.removeEventListener("storage", cb);
-    };
-  }, []);
-  const session = useSyncExternalStore(subscribe, readSession, () => DEFAULT_SESSION);
-  return {
-    session,
-    setRole: (role) => {
-      const current = readSession();
-      // Block role=approver if the email isn't on the allowlist. This is
-      // the guard for the dashboard RoleSwitcher. The UI already hides
-      // the switcher for non-listed users; this is the second line of
-      // defense against direct callers or future race conditions.
-      const safeRole: Role =
-        role === "approver" && !isApprover(current.email) ? "requester" : role;
-      writeSession({ ...current, role: safeRole });
-    },
-    setSession: writeSession,
-  };
+  const auth = useAuth();
+  const rolePref = useRolePref();
+  const session: Session =
+    auth.status === "signed-in"
+      ? {
+          name: auth.user.name,
+          email: auth.user.email,
+          role:
+            rolePref === "approver" && isApprover(auth.user.email)
+              ? "approver"
+              : "requester",
+        }
+      : DEFAULT_SESSION;
+  return { session, setRole: setRolePref };
 }
 
 export function nextOrderId(): string {
@@ -310,57 +317,16 @@ export function statusLabel(s: OrderStatus): string {
   }[s];
 }
 
-/* ---------------------------------- Onboarding gate ---------------------------------- */
-
-function readOnboarded(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(ONBOARDED_KEY) === "true";
-}
-
-export function setOnboarded(value: boolean) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(ONBOARDED_KEY, value ? "true" : "false");
-  window.dispatchEvent(new Event("parkwell:onboarded"));
-}
-
-export function chooseRole(role: Role) {
-  const current = readSession();
-  writeSession({ ...current, role });
-  setOnboarded(true);
-}
+/* ---------------------------------- Sign-out ---------------------------------- */
 
 /**
- * Sign in with full accountability data. Called from the welcome page once
- * the user has entered their name, email, and picked a role. Atomically
- * updates the session and marks onboarded so the gate releases.
+ * Real sign-out: ends the Supabase session (shared across Parkwell
+ * internal tools) and clears the device role preference. The auth store
+ * broadcasts the state change, so gates and headers react on their own.
  */
-export function signIn({
-  name,
-  email,
-  role,
-}: {
-  name: string;
-  email: string;
-  role: Role;
-}) {
-  writeSession({ name: name.trim(), email: email.trim(), role });
-  setOnboarded(true);
-}
-
 export function signOut() {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(ONBOARDED_KEY);
-  window.dispatchEvent(new Event("parkwell:onboarded"));
-}
-
-export function useOnboarded(): boolean {
-  const subscribe = useCallback((cb: () => void) => {
-    window.addEventListener("parkwell:onboarded", cb);
-    window.addEventListener("storage", cb);
-    return () => {
-      window.removeEventListener("parkwell:onboarded", cb);
-      window.removeEventListener("storage", cb);
-    };
-  }, []);
-  return useSyncExternalStore(subscribe, readOnboarded, () => false);
+  window.localStorage.removeItem(ROLE_KEY);
+  window.dispatchEvent(new Event("parkwell:role"));
+  void supabaseSignOut();
 }

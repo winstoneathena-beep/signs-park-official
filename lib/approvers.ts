@@ -2,11 +2,14 @@
  * Approver allowlist — the single source of truth for who can act as an
  * Approver on this site.
  *
- * Until TeamHub stands up real auth, "auth" here is just typing the right
- * email into the welcome page. This file gates THREE UI surfaces:
+ * Sign-in is real now — Supabase Auth (email + password) on the shared
+ * Parkwell instance, invite-gated — so the email this list is checked
+ * against is VERIFIED, not self-asserted. The list remains the interim
+ * authZ layer until the platform access matrix lands in the shared DB.
+ * It gates THREE UI surfaces:
  *
- *   1. /welcome           — only show the Approver role chip if the typed
- *                            email is on the list.
+ *   1. /welcome           — only show the Approver role chip if the
+ *                            signed-in email is on the list.
  *   2. Dashboard chrome   — hide the role switcher + "Switch role" button
  *                            for non-listed users.
  *   3. Order actions      — Approve / Reject / Mark-as-ordered buttons only
@@ -20,9 +23,9 @@
  * Every Parkwell user (Approver or Requester) must be on the
  * `@goparkwell.com` domain. See `isParkwellDomain()`.
  *
- * Adding / removing an approver = edit this list + push. When TeamHub
- * lands and we move to Clerk + Neon, this array becomes a DB table with
- * the same shape — no logic changes downstream.
+ * Adding / removing an approver = edit this list + push. When the access
+ * matrix lands in the shared Supabase instance, this array becomes a DB
+ * table with the same shape — no logic changes downstream.
  */
 
 export type ApproverRecord = {
@@ -54,9 +57,7 @@ export const APPROVERS: ApproverRecord[] = [
   { email: "jon@goparkwell.com" },
 ];
 
-const APPROVER_EMAIL_SET = new Set(
-  APPROVERS.map((a) => a.email.toLowerCase()),
-);
+const APPROVER_EMAIL_SET = new Set(APPROVERS.map((a) => a.email.toLowerCase()));
 
 const ADMIN_EMAIL_SET = new Set(
   APPROVERS.filter((a) => a.isAdmin).map((a) => a.email.toLowerCase()),
