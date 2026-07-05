@@ -42,6 +42,7 @@ import {
   getOrderById,
   nextOrderId,
   saveOrder,
+  useOrders,
   useSession,
   type Order,
 } from "@/lib/orders";
@@ -61,7 +62,11 @@ import { cn } from "@/lib/utils";
 
 type Step = "content" | "specs" | "review";
 
-export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }) {
+export function SignEditor({
+  initialTemplateId,
+}: {
+  initialTemplateId?: string;
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const { session } = useSession();
@@ -80,12 +85,16 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
     ? (() => {
         const isApprover = session.role === "approver";
         const isCreator = editingOrder.createdBy.email === session.email;
-        if (editingOrder.status === "approved" || editingOrder.status === "ordered")
+        if (
+          editingOrder.status === "approved" ||
+          editingOrder.status === "ordered"
+        )
           return false;
         if (isApprover && editingOrder.status === "pending") return true;
         if (
           isCreator &&
-          (editingOrder.status === "draft" || editingOrder.status === "rejected")
+          (editingOrder.status === "draft" ||
+            editingOrder.status === "rejected")
         )
           return true;
         return false;
@@ -121,6 +130,29 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
   const [siteNumber, setSiteNumber] = useState(editingOrder?.siteNumber ?? "");
   const [step, setStep] = useState<Step>("content");
   const [submittedOrderId, setSubmittedOrderId] = useState<string | null>(null);
+
+  // Orders load async from Supabase now — on a deep-link (?order=) the cache
+  // may still be empty at mount, so getOrderById above returned null. Adopt
+  // the order the moment it arrives and re-seed every field from it.
+  // (State-during-render is the sanctioned React pattern for this; the
+  // orderIdFromQuery && !editingOrder guard makes it run at most once.)
+  const allOrders = useOrders();
+  if (orderIdFromQuery && !editingOrder) {
+    const found = allOrders.find((o) => o.id === orderIdFromQuery);
+    if (found) {
+      setEditingOrder(found);
+      setTemplateId(found.templateId);
+      setValues(found.values);
+      setSize({ widthIn: found.specs.widthIn, heightIn: found.specs.heightIn });
+      setSpecs({
+        quantity: found.specs.quantity,
+        material: found.specs.material,
+        notes: found.specs.notes ?? "",
+      });
+      setLocation(found.location);
+      setSiteNumber(found.siteNumber);
+    }
+  }
 
   /**
    * Step-change ergonomics: after Continue / Back, scroll the window to the
@@ -167,7 +199,10 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
         cacheBust: true,
         backgroundColor: "#ffffff",
       });
-      triggerDownload(dataUrl, `${template.id}-${slug(location || "sign")}.png`);
+      triggerDownload(
+        dataUrl,
+        `${template.id}-${slug(location || "sign")}.png`,
+      );
     } finally {
       setPngPending(false);
     }
@@ -311,7 +346,8 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
           You can&rsquo;t edit this order
         </h1>
         <p className="mt-4 text-muted-foreground">
-          {editingOrder.status === "approved" || editingOrder.status === "ordered"
+          {editingOrder.status === "approved" ||
+          editingOrder.status === "ordered"
             ? `${editingOrder.id} is ${editingOrder.status} and locked.`
             : editingOrder.status === "pending"
               ? `${editingOrder.id} is in approval — only the assigned approver can edit it while it's there.`
@@ -361,7 +397,8 @@ export function SignEditor({ initialTemplateId }: { initialTemplateId?: string }
               </span>
               <span className="text-muted-foreground">·</span>
               <span className="text-muted-foreground">
-                Status: <span className="capitalize">{editingOrder.status}</span>
+                Status:{" "}
+                <span className="capitalize">{editingOrder.status}</span>
               </span>
               <span className="text-muted-foreground">·</span>
               <span className="text-muted-foreground">
@@ -537,7 +574,10 @@ function ContentStep({
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader title="1. Template" subtitle="What kind of sign are you ordering?" />
+        <CardHeader
+          title="1. Template"
+          subtitle="What kind of sign are you ordering?"
+        />
         <Select value={template.id} onValueChange={onTemplate}>
           <SelectTrigger className="h-12">
             <SelectValue />
@@ -550,7 +590,9 @@ function ContentStep({
             ))}
           </SelectContent>
         </Select>
-        <p className="mt-3 text-sm text-muted-foreground">{template.description}</p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          {template.description}
+        </p>
       </Card>
 
       <Card>
@@ -595,9 +637,12 @@ function FieldEditor({
 }) {
   if (field.type === "arrow-direction") {
     const current: ArrowDirection =
-      value === "right" || value === "left" || value === "up" || value === "down"
+      value === "right" ||
+      value === "left" ||
+      value === "up" ||
+      value === "down"
         ? value
-        : (field.placeholder as ArrowDirection) ?? "right";
+        : ((field.placeholder as ArrowDirection) ?? "right");
     return (
       <ArrowDirectionEditor
         label={field.label}
@@ -611,8 +656,10 @@ function FieldEditor({
     const rows: RateRow[] =
       Array.isArray(value) && value.length > 0 && typeof value[0] === "object"
         ? (value as RateRow[])
-        : field.defaultRows ?? DEFAULT_RATE_ROWS;
-    return <RateTableEditor label={field.label} rows={rows} onChange={onChange} />;
+        : (field.defaultRows ?? DEFAULT_RATE_ROWS);
+    return (
+      <RateTableEditor label={field.label} rows={rows} onChange={onChange} />
+    );
   }
 
   if (field.type === "list") {
@@ -634,7 +681,9 @@ function FieldEditor({
 
   if (field.type === "qr-image") {
     const dataUrl = typeof value === "string" ? value : "";
-    return <QrUploader label={field.label} value={dataUrl} onChange={onChange} />;
+    return (
+      <QrUploader label={field.label} value={dataUrl} onChange={onChange} />
+    );
   }
 
   const v = typeof value === "string" ? value : "";
@@ -645,7 +694,11 @@ function FieldEditor({
 
   return (
     <div>
-      <FieldLabel label={field.label} constraints={field.constraints} value={v} />
+      <FieldLabel
+        label={field.label}
+        constraints={field.constraints}
+        value={v}
+      />
       {isMultiline ? (
         <Textarea
           value={v}
@@ -682,7 +735,11 @@ function ArrowDirectionEditor({
   onChange: (v: ArrowDirection) => void;
 }) {
   // Order matches the visual compass — up, right, down, left.
-  const OPTIONS: { dir: ArrowDirection; Icon: React.ElementType; label: string }[] = [
+  const OPTIONS: {
+    dir: ArrowDirection;
+    Icon: React.ElementType;
+    label: string;
+  }[] = [
     { dir: "up", Icon: ChevronUp, label: "Up" },
     { dir: "right", Icon: ChevronRight, label: "Right" },
     { dir: "down", Icon: ChevronDown, label: "Down" },
@@ -798,7 +855,11 @@ function ListEditor({
         {items.map((item, i) => (
           <div key={i} className="flex gap-2 items-start">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground shrink-0">
-              {bulletStyle === "1." ? `${i + 1}.` : bulletStyle === "–" ? "–" : "•"}
+              {bulletStyle === "1."
+                ? `${i + 1}.`
+                : bulletStyle === "–"
+                  ? "–"
+                  : "•"}
             </span>
             <Textarea
               value={item}
@@ -876,7 +937,9 @@ function RateTableEditor({
             <Input
               placeholder="WEEKDAYS"
               value={row.label}
-              onChange={(e) => update(i, { ...row, label: e.target.value.toUpperCase() })}
+              onChange={(e) =>
+                update(i, { ...row, label: e.target.value.toUpperCase() })
+              }
             />
             <Input
               placeholder="5am-4pm"
@@ -888,7 +951,9 @@ function RateTableEditor({
             {row.rates.map((rate, j) => (
               <div key={j} className="flex gap-2">
                 <Input
-                  placeholder={j === 0 ? "$10 first 2 hours" : "$5 hourly thereafter"}
+                  placeholder={
+                    j === 0 ? "$10 first 2 hours" : "$5 hourly thereafter"
+                  }
                   value={rate}
                   onChange={(e) => {
                     const next = [...row.rates];
@@ -916,9 +981,7 @@ function RateTableEditor({
             {row.rates.length < 4 && (
               <button
                 type="button"
-                onClick={() =>
-                  update(i, { ...row, rates: [...row.rates, ""] })
-                }
+                onClick={() => update(i, { ...row, rates: [...row.rates, ""] })}
                 className="inline-flex items-center gap-1.5 text-xs text-parkwell-blue font-medium hover:underline"
               >
                 <Plus className="h-3.5 w-3.5" /> Add rate line
@@ -1033,9 +1096,7 @@ function QrUploader({
           e.target.value = "";
         }}
       />
-      {error && (
-        <p className="mt-2 text-xs text-parkwell-red">{error}</p>
-      )}
+      {error && <p className="mt-2 text-xs text-parkwell-red">{error}</p>}
     </div>
   );
 }
@@ -1072,9 +1133,10 @@ function SpecsStep({
 
   // Both fields are required for billing / expense coding — gate the Next
   // button and show inline validation on touched-but-empty inputs.
-  const [touched, setTouched] = useState<{ location: boolean; site: boolean }>(
-    { location: false, site: false },
-  );
+  const [touched, setTouched] = useState<{ location: boolean; site: boolean }>({
+    location: false,
+    site: false,
+  });
   const locationMissing = !location.trim();
   const siteMissing = !siteNumber.trim();
   const canContinue = !locationMissing && !siteMissing;
@@ -1165,7 +1227,10 @@ function SpecsStep({
           </SelectTrigger>
           <SelectContent>
             {template.sizes.map((s) => (
-              <SelectItem key={`${s.widthIn}x${s.heightIn}`} value={`${s.widthIn}x${s.heightIn}`}>
+              <SelectItem
+                key={`${s.widthIn}x${s.heightIn}`}
+                value={`${s.widthIn}x${s.heightIn}`}
+              >
                 {s.label ?? `${s.widthIn}" × ${s.heightIn}"`}
                 {s === template.sizes[0] && " (default)"}
               </SelectItem>
@@ -1173,7 +1238,8 @@ function SpecsStep({
           </SelectContent>
         </Select>
         <p className="mt-2 text-xs text-muted-foreground">
-          Text scales automatically with the chosen size — brand proportions stay consistent.
+          Text scales automatically with the chosen size — brand proportions
+          stay consistent.
         </p>
       </Card>
 
@@ -1222,7 +1288,11 @@ function SpecsStep({
       </Card>
 
       <div className="flex flex-col items-end gap-2 sm:flex-row sm:justify-between">
-        <Button onClick={onBack} variant="outline" className="h-12 rounded-full px-7">
+        <Button
+          onClick={onBack}
+          variant="outline"
+          className="h-12 rounded-full px-7"
+        >
           Back
         </Button>
         <div className="flex flex-col items-end gap-1.5">
@@ -1282,12 +1352,21 @@ function ReviewStep({
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader title="6. Review" subtitle="Looks good? Download or send for approval." />
+        <CardHeader
+          title="6. Review"
+          subtitle="Looks good? Download or send for approval."
+        />
         <dl className="grid grid-cols-2 gap-y-3 text-sm">
-          <Row label="Template" value={`${template.number} — ${template.name}`} />
+          <Row
+            label="Template"
+            value={`${template.number} — ${template.name}`}
+          />
           <Row label="Location" value={location || "—"} />
           <Row label="Site #" value={siteNumber || "—"} />
-          <Row label="Dimensions" value={`${size.widthIn}" × ${size.heightIn}"`} />
+          <Row
+            label="Dimensions"
+            value={`${size.widthIn}" × ${size.heightIn}"`}
+          />
           <Row label="Quantity" value={String(specs.quantity)} />
           <Row label="Material" value={specs.material} />
         </dl>
@@ -1414,7 +1493,11 @@ function ReviewStep({
       </Card>
 
       <div className="flex justify-start">
-        <Button onClick={onBack} variant="outline" className="h-12 rounded-full px-7">
+        <Button
+          onClick={onBack}
+          variant="outline"
+          className="h-12 rounded-full px-7"
+        >
           Back
         </Button>
       </div>
@@ -1436,7 +1519,9 @@ function CardHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <div className="mb-4">
       <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-      {subtitle && <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>}
+      {subtitle && (
+        <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
+      )}
     </div>
   );
 }
@@ -1480,9 +1565,7 @@ function Steps({ current }: { current: Step }) {
           >
             {labels[s]}
           </span>
-          {i < steps.length - 1 && (
-            <span className="w-6 h-px bg-border mx-1" />
-          )}
+          {i < steps.length - 1 && <span className="w-6 h-px bg-border mx-1" />}
         </div>
       ))}
     </div>

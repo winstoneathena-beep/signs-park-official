@@ -16,7 +16,7 @@ import { supabase } from "./supabase";
  * nothing touches supabase-js during SSR.
  */
 
-export type AuthUser = { name: string; email: string };
+export type AuthUser = { id: string; name: string; email: string };
 
 export type AuthState =
   | { status: "loading"; user: null }
@@ -39,12 +39,25 @@ function toState(session: Session | null): AuthState {
     (typeof meta.full_name === "string" && meta.full_name) ||
     (typeof meta.name === "string" && meta.name) ||
     "";
-  return { status: "signed-in", user: { name, email: user.email ?? "" } };
+  return {
+    status: "signed-in",
+    user: { id: user.id, name, email: user.email ?? "" },
+  };
 }
 
 function setState(next: AuthState) {
   state = next;
   for (const cb of listeners) cb();
+  // Broadcast beyond hook subscribers — the orders store reloads on
+  // sign-in/out since RLS decides what each session can see.
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("parkwell:auth"));
+  }
+}
+
+/** Current user id from the cached session (null while loading/signed out). */
+export function getAuthUserId(): string | null {
+  return state.user?.id ?? null;
 }
 
 /** Idempotent — the first subscriber kicks off session hydration. */
