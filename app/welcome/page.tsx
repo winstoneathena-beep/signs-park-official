@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
@@ -11,9 +11,13 @@ import {
   Lock,
   User,
   Mail,
+  KeyRound,
+  LogOut,
+  Loader2,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
-import { signIn, useSession, type Role } from "@/lib/orders";
+import { setRolePref, signOut, type Role } from "@/lib/orders";
+import { useAuth, signInWithPassword, signUpWithPassword } from "@/lib/auth";
 import { isApprover, isParkwellDomain } from "@/lib/approvers";
 import { cn } from "@/lib/utils";
 
@@ -57,34 +61,52 @@ const ROLES: {
 /** Lightweight email check — not RFC-perfect, just sane: x@y.z */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+type Mode = "signin" | "signup";
+
 export default function WelcomePage() {
   const router = useRouter();
-  // Pre-fill from the existing session so a "Switch role" flow doesn't
-  // force the user to re-type their identity. Fresh installs see empty
-  // fields because DEFAULT_SESSION is empty.
-  const { session } = useSession();
-  const [name, setName] = useState(session.name);
-  const [email, setEmail] = useState(session.email);
-  const [attempted, setAttempted] = useState(false);
+  const auth = useAuth();
 
-  // useSession's first render returns DEFAULT_SESSION on the server / before
-  // localStorage is read. After hydration the session may update; if the user
-  // hasn't typed anything yet, mirror those values into the form.
-  useEffect(() => {
-    setName((prev) => (prev ? prev : session.name));
-    setEmail((prev) => (prev ? prev : session.email));
-  }, [session.name, session.email]);
+  const [mode, setMode] = useState<Mode>("signin");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [attempted, setAttempted] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const signedIn = auth.status === "signed-in";
+  const verifiedEmail = signedIn ? auth.user.email : "";
 
   const trimmedName = name.trim();
   const trimmedEmail = email.trim();
-  const nameOk = trimmedName.length >= 2;
+  const nameOk = mode === "signin" || trimmedName.length >= 2;
   const emailShapeOk = EMAIL_RE.test(trimmedEmail);
   const domainOk = isParkwellDomain(trimmedEmail);
   const emailOk = emailShapeOk && domainOk;
-  // Approver access requires the email to be on the allowlist.
-  // Requester is the default for any valid @goparkwell.com email.
-  const approverEligible = emailOk && isApprover(trimmedEmail);
-  const canProceed = nameOk && emailOk;
+  const passwordOk = password.length >= 8;
+  const formOk = nameOk && emailOk && passwordOk;
+
+  // Approver access requires the VERIFIED (signed-in) email to be on the
+  // allowlist — the typed email proves nothing until Supabase accepts it.
+  const approverEligible = signedIn && isApprover(verifiedEmail);
+  const canProceed = signedIn;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAttempted(true);
+    if (!formOk || pending) return;
+    setPending(true);
+    setAuthError(null);
+    const error =
+      mode === "signup"
+        ? await signUpWithPassword(trimmedName, trimmedEmail, password)
+        : await signInWithPassword(trimmedEmail, password);
+    setPending(false);
+    if (error) setAuthError(error);
+    // Success needs no navigation — the auth store flips to signed-in and
+    // this page re-renders into the role-pick state.
+  };
 
   const pick = (role: Role) => {
     if (!canProceed) {
@@ -95,7 +117,7 @@ export default function WelcomePage() {
     // demoted. UI already hides the chip, but this is the seatbelt.
     const safeRole: Role =
       role === "approver" && !approverEligible ? "requester" : role;
-    signIn({ name: trimmedName, email: trimmedEmail, role: safeRole });
+    setRolePref(safeRole);
     router.replace("/");
   };
 
@@ -104,20 +126,21 @@ export default function WelcomePage() {
       <div className="absolute inset-0 bg-grid-soft opacity-50" aria-hidden />
       <div
         className="absolute -top-40 -right-40 w-[40rem] h-[40rem] rounded-full blur-[140px]"
-        style={{ background: "radial-gradient(circle, #19B2EC55, transparent 70%)" }}
+        style={{
+          background: "radial-gradient(circle, #19B2EC55, transparent 70%)",
+        }}
         aria-hidden
       />
       <div
         className="absolute -bottom-40 -left-40 w-[40rem] h-[40rem] rounded-full blur-[140px]"
-        style={{ background: "radial-gradient(circle, #19B2EC33, transparent 70%)" }}
+        style={{
+          background: "radial-gradient(circle, #19B2EC33, transparent 70%)",
+        }}
         aria-hidden
       />
 
       <div className="relative mx-auto max-w-6xl px-5 md:px-8 py-16 md:py-24">
-        <motion.div
-          initial={false}
-          animate={{ opacity: 1, y: 0 }}
-        >
+        <motion.div initial={false} animate={{ opacity: 1, y: 0 }}>
           <Logo tone="white" className="w-32" />
         </motion.div>
 
@@ -134,52 +157,135 @@ export default function WelcomePage() {
           <h1 className="mt-6 text-balance text-[clamp(2.5rem,6vw,4.5rem)] font-bold leading-[1.05] tracking-tight">
             Welcome.
             <br />
-            Tell us who you are.
+            Sign in to continue.
           </h1>
           <p className="mt-5 max-w-2xl text-base sm:text-lg leading-relaxed text-white/70">
-            Every sign order is tied to a name and email — for approval routing,
-            order history, and accountability. Fill these in, then pick the role
-            that matches what you&rsquo;re here to do today.
+            Every sign order is tied to a verified Parkwell account — for
+            approval routing, order history, and accountability. Sign in with
+            your work email, then pick the role that matches what you&rsquo;re
+            here to do today.
           </p>
         </motion.div>
 
-        {/* Accountability fields */}
+        {/* Step 1 — real authentication */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
           className="mt-10 max-w-2xl rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur p-5 md:p-6"
         >
-          <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/45 mb-4">
-            Step 1 — Identify yourself
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FieldOnDark
-              icon={User}
-              label="Full name"
-              placeholder="e.g. Andre Gurule"
-              value={name}
-              onChange={setName}
-              showError={attempted && !nameOk}
-              errorText="Please enter your full name."
-              autoComplete="name"
-            />
-            <FieldOnDark
-              icon={Mail}
-              label="Work email"
-              placeholder="e.g. andre@goparkwell.com"
-              value={email}
-              onChange={setEmail}
-              showError={attempted && !emailOk}
-              errorText={
-                !emailShapeOk
-                  ? "Please enter a valid work email."
-                  : "Use your @goparkwell.com email — this site is internal to Parkwell."
-              }
-              type="email"
-              autoComplete="email"
-            />
-          </div>
+          {signedIn ? (
+            <>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/45 mb-4">
+                Step 1 — Signed in
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-parkwell-green/15 text-parkwell-green ring-1 ring-parkwell-green/30">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <div className="text-sm font-semibold">
+                      {auth.user.name || auth.user.email}
+                    </div>
+                    <div className="text-xs text-white/55">
+                      {auth.user.email}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => signOut()}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 px-4 text-xs font-medium text-white/70 hover:text-white hover:border-white/30 transition-colors"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  Not you? Sign out
+                </button>
+              </div>
+            </>
+          ) : (
+            <form onSubmit={submit} noValidate>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/45">
+                  Step 1 —{" "}
+                  {mode === "signup" ? "Create your account" : "Sign in"}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode(mode === "signup" ? "signin" : "signup");
+                    setAuthError(null);
+                    setAttempted(false);
+                  }}
+                  className="text-[11px] font-medium text-parkwell-blue hover:underline"
+                >
+                  {mode === "signup"
+                    ? "Already have an account? Sign in"
+                    : "First time here? Create your account"}
+                </button>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {mode === "signup" && (
+                  <FieldOnDark
+                    icon={User}
+                    label="Full name"
+                    placeholder="e.g. Andre Gurule"
+                    value={name}
+                    onChange={setName}
+                    showError={attempted && !nameOk}
+                    errorText="Please enter your full name."
+                    autoComplete="name"
+                  />
+                )}
+                <FieldOnDark
+                  icon={Mail}
+                  label="Work email"
+                  placeholder="e.g. andre@goparkwell.com"
+                  value={email}
+                  onChange={setEmail}
+                  showError={attempted && !emailOk}
+                  errorText={
+                    !emailShapeOk
+                      ? "Please enter a valid work email."
+                      : "Use your @goparkwell.com email — this site is internal to Parkwell."
+                  }
+                  type="email"
+                  autoComplete="email"
+                />
+                <FieldOnDark
+                  icon={KeyRound}
+                  label="Password"
+                  placeholder="At least 8 characters"
+                  value={password}
+                  onChange={setPassword}
+                  showError={attempted && !passwordOk}
+                  errorText="Password must be at least 8 characters."
+                  type="password"
+                  autoComplete={
+                    mode === "signup" ? "new-password" : "current-password"
+                  }
+                />
+              </div>
+              <div className="mt-4 flex items-center gap-4">
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className={cn(
+                    "inline-flex h-11 items-center justify-center gap-2 rounded-full bg-parkwell-blue px-6 text-sm font-semibold text-white transition-colors",
+                    pending
+                      ? "opacity-60 cursor-wait"
+                      : "hover:bg-parkwell-blue/90",
+                  )}
+                >
+                  {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {mode === "signup" ? "Create account" : "Sign in"}
+                </button>
+                {authError && (
+                  <span className="text-sm text-parkwell-red">{authError}</span>
+                )}
+              </div>
+            </form>
+          )}
         </motion.div>
 
         <motion.div
@@ -194,12 +300,10 @@ export default function WelcomePage() {
         <div className="mt-4 grid gap-5 md:grid-cols-2">
           {ROLES.filter(
             (r) =>
-              // Hide Approver entirely unless the email is on the allowlist.
-              // We still render the Approver card BEFORE the user types
-              // anything (canProceed=false) — that's the discovery state.
-              // Only once a valid email is typed AND it isn't on the list
-              // do we suppress the chip.
-              r.id !== "approver" || !emailOk || approverEligible,
+              // Hide Approver entirely unless the signed-in email is on the
+              // allowlist. Before sign-in both cards render (discovery
+              // state); once we know who you are, the chip is truth.
+              r.id !== "approver" || !signedIn || approverEligible,
           ).map((r, i) => {
             const disabled = !canProceed;
             return (
@@ -210,7 +314,11 @@ export default function WelcomePage() {
                 aria-disabled={disabled}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.12 + i * 0.05, ease: [0.16, 1, 0.3, 1] }}
+                transition={{
+                  duration: 0.3,
+                  delay: 0.12 + i * 0.05,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
                 whileHover={disabled ? undefined : { y: -4 }}
                 className={cn(
                   "group relative text-left rounded-3xl p-7 md:p-9 border transition-colors",
@@ -275,7 +383,9 @@ export default function WelcomePage() {
                 <div
                   className={cn(
                     "absolute inset-x-0 bottom-0 h-1 rounded-b-3xl bg-gradient-to-r from-parkwell-blue to-parkwell-green transition-opacity",
-                    disabled ? "opacity-0" : "opacity-0 group-hover:opacity-100",
+                    disabled
+                      ? "opacity-0"
+                      : "opacity-0 group-hover:opacity-100",
                   )}
                   aria-hidden
                 />
@@ -290,18 +400,18 @@ export default function WelcomePage() {
             animate={{ opacity: 1 }}
             className="mt-6 text-sm text-parkwell-red text-center"
           >
-            Fill in your name and a valid work email before picking a role.
+            Sign in before picking a role.
           </motion.p>
         )}
 
-        {emailOk && !approverEligible && (
+        {signedIn && !approverEligible && (
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="mt-6 text-center text-xs text-white/50"
           >
-            Approver access is granted by an administrator. If you need
-            approval rights, ask your manager.
+            Approver access is granted by an administrator. If you need approval
+            rights, ask your manager.
           </motion.p>
         )}
 
@@ -311,7 +421,8 @@ export default function WelcomePage() {
           transition={{ delay: 0.7, duration: 0.6 }}
           className="mt-10 text-center text-xs text-white/40"
         >
-          Your information is saved on this device. Sign out anytime from the dashboard.
+          One Parkwell login, shared across internal tools. Accounts are
+          invite-only — ask an admin if you can&rsquo;t sign up.
         </motion.p>
       </div>
     </div>
@@ -366,7 +477,9 @@ function FieldOnDark({
         />
       </div>
       {showError && errorText && (
-        <span className="mt-1.5 block text-[11px] text-parkwell-red">{errorText}</span>
+        <span className="mt-1.5 block text-[11px] text-parkwell-red">
+          {errorText}
+        </span>
       )}
     </label>
   );

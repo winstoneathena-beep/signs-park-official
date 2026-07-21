@@ -3,8 +3,12 @@
 import { useCallback, useSyncExternalStore } from "react";
 import type { FieldValues } from "@/components/sign/SignPreview";
 import { isApprover } from "./approvers";
+import { useAuth, supabaseSignOut, getAuthUserId } from "./auth";
+import { migrateLegacyOrders } from "./migrate-legacy";
+import { supabase } from "./supabase";
 
-export type OrderStatus = "draft" | "pending" | "approved" | "ordered" | "rejected";
+export type OrderStatus =
+  "draft" | "pending" | "approved" | "ordered" | "rejected";
 
 export type Order = {
   id: string;
@@ -39,9 +43,8 @@ export type Order = {
 
 export type Role = "requester" | "approver";
 
-const ORDERS_KEY = "parkwell.orders.v1";
-const SESSION_KEY = "parkwell.session.v1";
-const ONBOARDED_KEY = "parkwell.onboarded.v1";
+/** Device-local UI preference only — identity comes from Supabase Auth. */
+const ROLE_KEY = "parkwell.role.v1";
 
 type Session = {
   name: string;
@@ -55,220 +58,180 @@ const DEFAULT_SESSION: Session = {
   role: "requester",
 };
 
-const SAMPLE_ORDERS: Order[] = [
-  {
-    id: "ORD-2026-0184",
-    templateId: "standard-rate",
-    status: "pending",
-    values: {
-      locationName: "250 COLUMBINE",
-      rateTable: [
-        {
-          label: "WEEKDAYS",
-          sub: "5am-4pm",
-          rates: ["$10 first 2 hours", "$5 hourly thereafter", "$25 maximum"],
-        },
-        { label: "WEEKNIGHTS", sub: "4pm-5am", rates: ["$15 flat rate"] },
-        { label: "WEEKENDS", sub: "5am-5am", rates: ["$15 flat rate"] },
-      ],
-      additional:
-        "$35 lost ticket fee.\nNew day starts at 5am.\nEvent rates may apply.",
-    },
-    specs: { widthIn: 24, heightIn: 36, quantity: 4, material: "Aluminium" },
-    location: "250 Columbine — Denver",
-    siteNumber: "PW-0250",
-    createdBy: { name: "Andre Gurule", email: "andre@goparkwell.com", role: "requester" },
-    createdAt: Date.now() - 1000 * 60 * 60 * 26,
-    updatedAt: Date.now() - 1000 * 60 * 60 * 4,
-  },
-  {
-    id: "ORD-2026-0181",
-    templateId: "directional-windmaster",
-    status: "approved",
-    values: { locationName: "RIVERVIEW PLAZA" },
-    specs: { widthIn: 24, heightIn: 36, quantity: 2, material: "Coroplast" },
-    location: "Riverview Plaza — Boulder",
-    siteNumber: "PW-1108",
-    createdBy: { name: "Shannon Snow", email: "shannon@goparkwell.com", role: "requester" },
-    createdAt: Date.now() - 1000 * 60 * 60 * 80,
-    updatedAt: Date.now() - 1000 * 60 * 60 * 12,
-    approval: {
-      decidedBy: "Michael Miller",
-      decidedAt: Date.now() - 1000 * 60 * 60 * 12,
-      notes: "Looks great. Cleared for vendor.",
-    },
-  },
-  {
-    id: "ORD-2026-0179",
-    templateId: "scan-to-pay-standard",
-    status: "ordered",
-    values: {},
-    specs: { widthIn: 18, heightIn: 27, quantity: 6, material: "Vinyl" },
-    location: "Sunset Row — Los Angeles",
-    siteNumber: "PW-2204",
-    createdBy: { name: "Travis Bruce", email: "travis@goparkwell.com", role: "requester" },
-    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 6,
-    updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 2,
-    approval: {
-      decidedBy: "Michael Miller",
-      decidedAt: Date.now() - 1000 * 60 * 60 * 24 * 3,
-    },
-  },
-  {
-    id: "ORD-2026-0175",
-    templateId: "valet-podium-rate",
-    status: "approved",
-    values: { propertyName: "LIMELIGHT" },
-    specs: { widthIn: 18, heightIn: 24, quantity: 2, material: "Dibond" },
-    location: "Limelight — Denver",
-    siteNumber: "PW-0473",
-    createdBy: { name: "Roman Khaimov", email: "roman@goparkwell.com", role: "requester" },
-    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 8,
-    updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 1.5,
-    approval: {
-      decidedBy: "Michael Miller",
-      decidedAt: Date.now() - 1000 * 60 * 60 * 24 * 1.5,
-    },
-  },
-  {
-    id: "ORD-2026-0173",
-    templateId: "limit-of-liability",
-    status: "ordered",
-    values: {},
-    specs: { widthIn: 18, heightIn: 24, quantity: 12, material: "Aluminium" },
-    location: "Multi-site — Denver Metro",
-    siteNumber: "PW-MULTI",
-    createdBy: { name: "Ryan Whitehurst", email: "ryan@goparkwell.com", role: "requester" },
-    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 12,
-    updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 9,
-    approval: {
-      decidedBy: "Michael Miller",
-      decidedAt: Date.now() - 1000 * 60 * 60 * 24 * 11,
-    },
-  },
-];
+/* ---------------------------------- Orders store ---------------------------------- */
 
 /**
- * Snapshot caching is REQUIRED here — useSyncExternalStore loops if getSnapshot
- * returns a fresh reference every call. We key the cache off the raw localStorage
- * string so it invalidates exactly when the data changes.
+ * Orders live in `public.sign_orders` on the shared Parkwell Supabase
+ * instance — RLS-enforced, so a Requester's submission actually reaches
+ * Approvers on other machines (the old localStorage store was
+ * per-browser fiction). This module keeps a client cache with the same
+ * useSyncExternalStore contract the UI already speaks: mutations update
+ * the cache optimistically, persist via PostgREST, then reconcile from
+ * the server (which also reverts anything RLS refused).
  */
-let ordersRawCache: string | null = null;
-let ordersCache: Order[] = SAMPLE_ORDERS;
-let sessionRawCache: string | null = null;
-let sessionCache: Session = DEFAULT_SESSION;
 
-function readOrders(): Order[] {
-  if (typeof window === "undefined") return SAMPLE_ORDERS;
-  try {
-    let raw = window.localStorage.getItem(ORDERS_KEY);
-    if (!raw) {
-      raw = JSON.stringify(SAMPLE_ORDERS);
-      window.localStorage.setItem(ORDERS_KEY, raw);
-    }
-    if (raw === ordersRawCache) return ordersCache;
-    ordersRawCache = raw;
-    // Backfill `siteNumber` on orders saved before that field existed —
-    // otherwise the dashboard renders `undefined` and the dialog crashes.
-    ordersCache = (JSON.parse(raw) as Order[]).map((o) => ({
-      ...o,
-      siteNumber: o.siteNumber ?? "",
-    }));
-    return ordersCache;
-  } catch {
-    return ordersCache;
-  }
+type SignOrderRow = {
+  id: string;
+  template_id: string;
+  status: OrderStatus;
+  field_values: FieldValues;
+  specs: Order["specs"];
+  location: string;
+  site_number: string;
+  created_by: string;
+  created_by_name: string;
+  created_by_email: string;
+  created_by_role: string;
+  approval: Order["approval"] | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function fromRow(row: SignOrderRow): Order {
+  return {
+    id: row.id,
+    templateId: row.template_id,
+    status: row.status,
+    values: row.field_values ?? {},
+    specs: row.specs,
+    location: row.location,
+    siteNumber: row.site_number,
+    createdBy: {
+      name: row.created_by_name,
+      email: row.created_by_email,
+      role: row.created_by_role === "approver" ? "approver" : "requester",
+    },
+    createdAt: Date.parse(row.created_at),
+    updatedAt: Date.parse(row.updated_at),
+    approval: row.approval ?? undefined,
+  };
 }
 
-function writeOrders(orders: Order[]) {
-  if (typeof window === "undefined") return;
-  const raw = JSON.stringify(orders);
-  window.localStorage.setItem(ORDERS_KEY, raw);
-  ordersRawCache = raw;
-  ordersCache = orders;
+/** Columns both INSERT and UPDATE may write (never created_by/created_at). */
+function writeCols(order: Order) {
+  return {
+    template_id: order.templateId,
+    status: order.status,
+    field_values: order.values,
+    specs: order.specs,
+    location: order.location,
+    site_number: order.siteNumber,
+    approval: order.approval ?? null,
+  };
+}
+
+const EMPTY_ORDERS: Order[] = [];
+let orders: Order[] = EMPTY_ORDERS;
+let loadPending = false;
+let watchersInstalled = false;
+
+function emitOrders() {
   window.dispatchEvent(new Event("parkwell:orders"));
 }
 
-function readSession(): Session {
-  if (typeof window === "undefined") return DEFAULT_SESSION;
-  try {
-    let raw = window.localStorage.getItem(SESSION_KEY);
-    if (!raw) {
-      raw = JSON.stringify(DEFAULT_SESSION);
-      window.localStorage.setItem(SESSION_KEY, raw);
-    }
-    if (raw === sessionRawCache) return sessionCache;
-    sessionRawCache = raw;
-    const parsed = JSON.parse(raw) as Session;
-    // Silent downgrade: a localStorage record claiming approver access
-    // gets demoted to requester if the email isn't on the allowlist.
-    // Defense against pre-allowlist saves AND hand-edits via DevTools.
-    // We intentionally don't writeSession() back — that would loop
-    // through useSyncExternalStore. Reads stay normalised; the next
-    // writeSession (sign-in, setRole) will persist the corrected value.
-    if (parsed.role === "approver" && !isApprover(parsed.email)) {
-      parsed.role = "requester";
-    }
-    sessionCache = parsed;
-    return sessionCache;
-  } catch {
-    return sessionCache;
+async function loadOrders() {
+  if (loadPending || typeof window === "undefined") return;
+  loadPending = true;
+  // One-time per browser: push any pre-Supabase localStorage orders into the
+  // shared table before the first read, so they appear in this very load.
+  const uid = getAuthUserId();
+  if (uid) await migrateLegacyOrders(uid);
+  const { data, error } = await supabase
+    .from("sign_orders")
+    .select("*")
+    .order("created_at", { ascending: false });
+  loadPending = false;
+  if (error) {
+    console.error("[signs] loading orders failed:", error.message);
+    return;
   }
+  orders = (data as SignOrderRow[]).map(fromRow);
+  emitOrders();
 }
 
-function writeSession(s: Session) {
-  if (typeof window === "undefined") return;
-  const raw = JSON.stringify(s);
-  window.localStorage.setItem(SESSION_KEY, raw);
-  sessionRawCache = raw;
-  sessionCache = s;
-  window.dispatchEvent(new Event("parkwell:session"));
+/**
+ * The shared approval queue has no realtime channel (yet) — the cache
+ * refreshes on sign-in/out, tab focus, and after every mutation. Good
+ * enough for a queue worked a few times a day.
+ */
+function ensureOrdersWatchers() {
+  if (watchersInstalled || typeof window === "undefined") return;
+  watchersInstalled = true;
+  window.addEventListener("parkwell:auth", () => void loadOrders());
+  window.addEventListener("focus", () => void loadOrders());
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void loadOrders();
+  });
 }
 
 export function useOrders(): Order[] {
   const subscribe = useCallback((cb: () => void) => {
+    ensureOrdersWatchers();
+    if (orders === EMPTY_ORDERS) void loadOrders();
     window.addEventListener("parkwell:orders", cb);
-    window.addEventListener("storage", cb);
-    return () => {
-      window.removeEventListener("parkwell:orders", cb);
-      window.removeEventListener("storage", cb);
-    };
+    return () => window.removeEventListener("parkwell:orders", cb);
   }, []);
-  return useSyncExternalStore(subscribe, readOrders, () => SAMPLE_ORDERS);
+  return useSyncExternalStore(
+    subscribe,
+    () => orders,
+    () => EMPTY_ORDERS,
+  );
 }
 
-export function useSession(): {
-  session: Session;
-  setRole: (role: Role) => void;
-  setSession: (s: Session) => void;
-} {
-  const subscribe = useCallback((cb: () => void) => {
-    window.addEventListener("parkwell:session", cb);
-    window.addEventListener("storage", cb);
-    return () => {
-      window.removeEventListener("parkwell:session", cb);
-      window.removeEventListener("storage", cb);
-    };
-  }, []);
-  const session = useSyncExternalStore(subscribe, readSession, () => DEFAULT_SESSION);
-  return {
-    session,
-    setRole: (role) => {
-      const current = readSession();
-      // Block role=approver if the email isn't on the allowlist. This is
-      // the guard for the dashboard RoleSwitcher. The UI already hides
-      // the switcher for non-listed users; this is the second line of
-      // defense against direct callers or future race conditions.
-      const safeRole: Role =
-        role === "approver" && !isApprover(current.email) ? "requester" : role;
-      writeSession({ ...current, role: safeRole });
-    },
-    setSession: writeSession,
-  };
+async function persistOrder(order: Order, exists: boolean) {
+  let errorMessage: string | null = null;
+  if (exists) {
+    const { error } = await supabase
+      .from("sign_orders")
+      .update(writeCols(order))
+      .eq("id", order.id);
+    errorMessage = error?.message ?? null;
+  } else {
+    const uid = getAuthUserId();
+    if (!uid) {
+      errorMessage = "not signed in";
+    } else {
+      const { error } = await supabase.from("sign_orders").insert({
+        ...writeCols(order),
+        id: order.id,
+        created_by: uid,
+        created_by_name: order.createdBy.name,
+        created_by_email: order.createdBy.email,
+        created_by_role: order.createdBy.role,
+      });
+      errorMessage = error?.message ?? null;
+    }
+  }
+  if (errorMessage) {
+    console.error(`[signs] saving ${order.id} failed:`, errorMessage);
+  }
+  // Reconcile: server timestamps/status win, and optimistic writes that
+  // RLS refused get rolled back in the same pass.
+  await loadOrders();
+}
+
+export function saveOrder(order: Order) {
+  const exists = orders.some((o) => o.id === order.id);
+  // Must produce a NEW array reference. useSyncExternalStore compares
+  // snapshots by Object.is — mutating in place would skip re-renders.
+  orders = exists
+    ? orders.map((o) => (o.id === order.id ? order : o))
+    : [order, ...orders];
+  emitOrders();
+  void persistOrder(order, exists);
+}
+
+export function deleteOrder(id: string) {
+  orders = orders.filter((o) => o.id !== id);
+  emitOrders();
+  void (async () => {
+    const { error } = await supabase.from("sign_orders").delete().eq("id", id);
+    if (error) console.error(`[signs] deleting ${id} failed:`, error.message);
+    await loadOrders();
+  })();
 }
 
 export function nextOrderId(): string {
-  const orders = readOrders();
   const year = new Date().getFullYear();
   let max = 0;
   for (const o of orders) {
@@ -278,26 +241,11 @@ export function nextOrderId(): string {
   return `ORD-${year}-${String(max + 1).padStart(4, "0")}`;
 }
 
-export function saveOrder(order: Order) {
-  // Must produce a NEW array reference. useSyncExternalStore compares snapshots
-  // by Object.is — mutating the cached array in place would skip re-renders.
-  const current = readOrders();
-  const idx = current.findIndex((o) => o.id === order.id);
-  const next =
-    idx >= 0
-      ? current.map((o, i) => (i === idx ? order : o))
-      : [order, ...current];
-  writeOrders(next);
-}
-
-export function deleteOrder(id: string) {
-  writeOrders(readOrders().filter((o) => o.id !== id));
-}
-
-/** Synchronous order lookup — safe to call from useState initializers. */
+/** Synchronous order lookup from the cache — safe in useState initializers,
+ *  but the cache loads async: deep-link consumers must also watch
+ *  useOrders() and adopt the order when it arrives (see SignEditor). */
 export function getOrderById(id: string): Order | null {
-  if (typeof window === "undefined") return null;
-  return readOrders().find((o) => o.id === id) ?? null;
+  return orders.find((o) => o.id === id) ?? null;
 }
 
 export function statusLabel(s: OrderStatus): string {
@@ -310,57 +258,71 @@ export function statusLabel(s: OrderStatus): string {
   }[s];
 }
 
-/* ---------------------------------- Onboarding gate ---------------------------------- */
+/* ---------------------------------- Session ---------------------------------- */
 
-function readOnboarded(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(ONBOARDED_KEY) === "true";
+function readRolePref(): Role {
+  if (typeof window === "undefined") return "requester";
+  return window.localStorage.getItem(ROLE_KEY) === "approver"
+    ? "approver"
+    : "requester";
 }
 
-export function setOnboarded(value: boolean) {
+export function setRolePref(role: Role) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(ONBOARDED_KEY, value ? "true" : "false");
-  window.dispatchEvent(new Event("parkwell:onboarded"));
+  window.localStorage.setItem(ROLE_KEY, role);
+  window.dispatchEvent(new Event("parkwell:role"));
 }
 
-export function chooseRole(role: Role) {
-  const current = readSession();
-  writeSession({ ...current, role });
-  setOnboarded(true);
-}
-
-/**
- * Sign in with full accountability data. Called from the welcome page once
- * the user has entered their name, email, and picked a role. Atomically
- * updates the session and marks onboarded so the gate releases.
- */
-export function signIn({
-  name,
-  email,
-  role,
-}: {
-  name: string;
-  email: string;
-  role: Role;
-}) {
-  writeSession({ name: name.trim(), email: email.trim(), role });
-  setOnboarded(true);
-}
-
-export function signOut() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(ONBOARDED_KEY);
-  window.dispatchEvent(new Event("parkwell:onboarded"));
-}
-
-export function useOnboarded(): boolean {
+function useRolePref(): Role {
   const subscribe = useCallback((cb: () => void) => {
-    window.addEventListener("parkwell:onboarded", cb);
+    window.addEventListener("parkwell:role", cb);
     window.addEventListener("storage", cb);
     return () => {
-      window.removeEventListener("parkwell:onboarded", cb);
+      window.removeEventListener("parkwell:role", cb);
       window.removeEventListener("storage", cb);
     };
   }, []);
-  return useSyncExternalStore(subscribe, readOnboarded, () => false);
+  return useSyncExternalStore(subscribe, readRolePref, () => "requester");
+}
+
+/**
+ * Session = verified Supabase Auth identity + a device-local role
+ * preference. The effective role is re-derived on every render:
+ * `approver` only when the preference says so AND the verified email is
+ * on the allowlist — so a hand-edited localStorage role pref still
+ * renders as requester. `setRole` stores the raw preference; the
+ * derivation is the guard.
+ */
+export function useSession(): {
+  session: Session;
+  setRole: (role: Role) => void;
+} {
+  const auth = useAuth();
+  const rolePref = useRolePref();
+  const session: Session =
+    auth.status === "signed-in"
+      ? {
+          name: auth.user.name,
+          email: auth.user.email,
+          role:
+            rolePref === "approver" && isApprover(auth.user.email)
+              ? "approver"
+              : "requester",
+        }
+      : DEFAULT_SESSION;
+  return { session, setRole: setRolePref };
+}
+
+/* ---------------------------------- Sign-out ---------------------------------- */
+
+/**
+ * Real sign-out: ends the Supabase session (shared across Parkwell
+ * internal tools) and clears the device role preference. The auth store
+ * broadcasts the state change, so gates and headers react on their own.
+ */
+export function signOut() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(ROLE_KEY);
+  window.dispatchEvent(new Event("parkwell:role"));
+  void supabaseSignOut();
 }

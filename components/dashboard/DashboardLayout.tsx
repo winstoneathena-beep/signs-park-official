@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { LayoutDashboard, Files, ShieldCheck, Library, Plus, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  Files,
+  ShieldCheck,
+  Library,
+  Plus,
+  LogOut,
+} from "lucide-react";
 import { useSession, signOut } from "@/lib/orders";
 import { isApprover } from "@/lib/approvers";
 import { roleAbbrev } from "@/lib/user-display";
@@ -10,10 +17,30 @@ import { RoleSwitcher } from "./RoleSwitcher";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard, roles: ["requester", "approver"] as const },
-  { href: "/dashboard/orders", label: "Orders", icon: Files, roles: ["requester", "approver"] as const },
-  { href: "/dashboard/queue", label: "Approval queue", icon: ShieldCheck, roles: ["approver"] as const },
-  { href: "/templates", label: "Sign library", icon: Library, roles: ["requester", "approver"] as const },
+  {
+    href: "/dashboard",
+    label: "Overview",
+    icon: LayoutDashboard,
+    roles: ["requester", "approver"] as const,
+  },
+  {
+    href: "/dashboard/orders",
+    label: "Orders",
+    icon: Files,
+    roles: ["requester", "approver"] as const,
+  },
+  {
+    href: "/dashboard/queue",
+    label: "Approval queue",
+    icon: ShieldCheck,
+    roles: ["approver"] as const,
+  },
+  {
+    href: "/templates",
+    label: "Sign library",
+    icon: Library,
+    roles: ["requester", "approver"] as const,
+  },
 ];
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -27,7 +54,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const canSwitchRole = isApprover(session.email);
 
   const onSignOut = () => {
-    signOut();
+    // Approvers "switch role" — back to /welcome to re-pick, still signed
+    // in (Supabase session survives; only the role pick is revisited).
+    // Requesters have nothing to switch to, so their button is a real
+    // sign-out that ends the Supabase session.
+    if (!canSwitchRole) signOut();
     router.replace("/welcome");
   };
 
@@ -36,7 +67,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.2em] text-parkwell-blue">
-            {session.role === "approver" ? "Approver dashboard" : "Requester dashboard"}
+            {session.role === "approver"
+              ? "Approver dashboard"
+              : "Requester dashboard"}
           </div>
           <h1 className="mt-1.5 text-3xl md:text-4xl font-bold tracking-tight">
             Welcome back, {session.name.split(" ")[0]}{" "}
@@ -45,8 +78,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </span>
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Signed in as <span className="font-semibold">{session.name}</span>{" "}
-            · {session.email}
+            Signed in as <span className="font-semibold">{session.name}</span> ·{" "}
+            {session.email}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
