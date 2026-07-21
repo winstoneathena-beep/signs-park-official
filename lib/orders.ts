@@ -4,6 +4,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import type { FieldValues } from "@/components/sign/SignPreview";
 import { isApprover } from "./approvers";
 import { useAuth, supabaseSignOut, getAuthUserId } from "./auth";
+import { migrateLegacyOrders } from "./migrate-legacy";
 import { supabase } from "./supabase";
 
 export type OrderStatus =
@@ -131,6 +132,10 @@ function emitOrders() {
 async function loadOrders() {
   if (loadPending || typeof window === "undefined") return;
   loadPending = true;
+  // One-time per browser: push any pre-Supabase localStorage orders into the
+  // shared table before the first read, so they appear in this very load.
+  const uid = getAuthUserId();
+  if (uid) await migrateLegacyOrders(uid);
   const { data, error } = await supabase
     .from("sign_orders")
     .select("*")
